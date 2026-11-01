@@ -110,14 +110,14 @@ bool BRIG_IsMapWeaponAllowed(const char* classname)
 	while (*current)
 	{
 		while (*current == ',' || *current == ';' || *current == ' ' ||
-			*current == '\\t' || *current == '\\r' || *current == '\\n')
+			*current == '\t' || *current == '\r' || *current == '\n')
 		{
 			++current;
 		}
 
 		const char* token = current;
 		while (*current && *current != ',' && *current != ';' &&
-			*current != ' ' && *current != '\\t' && *current != '\\r' && *current != '\\n')
+			*current != ' ' && *current != '\t' && *current != '\r' && *current != '\n')
 		{
 			++current;
 		}
@@ -163,7 +163,7 @@ void BRIG_LoadMapProfile()
 		}
 		else
 		{
-			ALERT(at_console, "[Brig] Refusing unsafe map profile name.\\n");
+			ALERT(at_console, "[Brig] Refusing unsafe map profile name.\n");
 			return;
 		}
 	}
@@ -173,11 +173,11 @@ void BRIG_LoadMapProfile()
 		return;
 
 	char command[128];
-	snprintf(command, sizeof(command), "exec maps/%s.cfg\\n", mapName);
+	snprintf(command, sizeof(command), "exec maps/%s.cfg\n", mapName);
 	SERVER_COMMAND(command);
 	SERVER_EXECUTE();
 
-	ALERT(at_console, "[Brig] Checked map presentation profile: maps/%s.cfg\\n", mapName);
+	ALERT(at_console, "[Brig] Checked map presentation profile: maps/%s.cfg\n", mapName);
 }
 
 //CVARS FOR SKILL LEVEL SETTINGS
