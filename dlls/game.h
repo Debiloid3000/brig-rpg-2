@@ -20,6 +20,9 @@ void GameDLLShutdown();
 
 void BRIG_LoadMapProfile();
 bool BRIG_IsMapWeaponAllowed(const char* classname);
+void BRIG_BeginPlayerItemSpawn();
+void BRIG_EndPlayerItemSpawn();
+bool BRIG_IsPlayerItemSpawn();
 bool BRIG_IsSafeAssetPrefix(const char* prefix);
 const char* BRIG_GetMapPlayerModel();
 const char* BRIG_GetMapVoicePrefix();
