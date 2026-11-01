@@ -1,4 +1,4 @@
-# Map-local player models and dialogue
+# Map-local player models, dialogue and first-person controls
 
 The map setup follows the Sven Co-op-style GoldSrc pattern: a map CFG selects allowed player-model folders and one shared sound replacement list. That one list can contain ordinary non-weapon audio paths and named sentence replacements, so there is no separate voice prefix.
 
@@ -54,6 +54,41 @@ A named sentence begins with `!`. This lets the same replacement list redirect a
 
 Blank lines and lines beginning with `#` or `//` are ignored. Absolute paths, traversal paths, invalid characters, and weapon-associated audio paths are rejected. Replacement files are precached when the map list loads, before map entities begin playing them. Missing or invalid list files leave the original audio unchanged.
 
+## Camera and first-person weapon settings
+
+These are personal client settings, not map-profile options. They are registered when the client HUD starts; changing them does not modify the server's map configuration.
+
+| Cvar | Default | Purpose | Accepted range |
+| --- | ---: | --- | ---: |
+| `default_fov` | 90 | Player/world camera FOV | Existing game limits |
+| `viewmodel_fov` | 68 | First-person weapon model size | 54–68 |
+| `viewmodel_offset_x` | 0 | Move weapon left/right | -2 to 2.5 |
+| `viewmodel_offset_y` | 0 | Move weapon forward/back | -2 to 2 |
+| `viewmodel_offset_z` | 0 | Move weapon down/up | -2 to 2 |
+
+The offsets are applied to the viewmodel only; they do not move the player's camera. The cvars are archived, so a player's chosen values persist after they change them.
+
+`viewmodel_fov` is implemented as a viewmodel-only geometry scale in the client Studio renderer. It changes the apparent size of the hands/weapon without changing the world-camera `default_fov`. GoldSrc exposes a shared scene projection through this client interface, so this is an FOV-style visual control rather than a separate renderer projection matrix identical to CS2.
+
+Three starting layouts are available:
+
+```cfg
+viewmodel_presetpos 1 // default / centered
+viewmodel_presetpos 2 // larger / closer
+viewmodel_presetpos 3 // classic-style offset
+```
+
+A preset sets the four viewmodel cvars; the individual values can then be adjusted normally. Presets are not applied automatically.
+
+## Bob and camera roll defaults
+
+This project does **not** force either option to zero at startup. Its existing defaults are:
+
+- `cl_bob 0.01` — small weapon bob.
+- `cl_rollangle 2.0` — camera roll amount.
+
+To disable them manually for the current client, enter `cl_bob 0` and/or `cl_rollangle 0` in that client's console. Those commands are optional personal preferences; they are not added to a generated `autoexec.cfg` and are not forced by map profiles.
+
 ## Asset layout
 
 For the example above:
@@ -80,12 +115,6 @@ sound/
 ```
 
 This is an example layout, not a claim that these model folders or audio files are already included. The names must match the assets present in the mod.
-
-## Camera defaults
-
-`default_fov` remains the normal player-camera FOV setting. The documentation and map setup do not add `cl_bob 0` or `cl_rollangle 0` to startup configuration, and do not force those values on players. Existing client defaults are left alone unless a player changes their own config.
-
-The removed `viewmodel_prefix` concept is not part of the map profile system. There is no separate viewmodel asset directory setting.
 
 ## Map changes and reset behavior
 
