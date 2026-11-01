@@ -48,80 +48,28 @@ cvar_t mp_chattime = {"mp_chattime", "10", FCVAR_SERVER};
 
 cvar_t sv_allowbunnyhopping = {"sv_allowbunnyhopping", "0", FCVAR_SERVER};
 
-cvar_t brig_map_profile = {"brig_map_profile", "default", FCVAR_SERVER};
-cvar_t brig_map_weapon_allowlist = {"brig_map_weapon_allowlist", "", FCVAR_SERVER};
-cvar_t brig_map_player_model = {"brig_map_player_model", "", FCVAR_SERVER};
-cvar_t brig_map_voice_prefix = {"brig_map_voice_prefix", "", FCVAR_SERVER};
-cvar_t brig_map_sound_prefix = {"brig_map_sound_prefix", "", FCVAR_SERVER};
-cvar_t brig_map_viewmodel_prefix = {"brig_map_viewmodel_prefix", "", FCVAR_SERVER};
+cvar_t forcepmodels = {"forcepmodels", "", FCVAR_SERVER};
+cvar_t globalsoundlist = {"globalsoundlist", "", FCVAR_SERVER};
 
-const char* BRIG_GetMapPlayerModel()
+struct MapSoundReplacement
 {
-	return CVAR_GET_STRING("brig_map_player_model");
-}
+	char source[128];
+	char replacement[128];
+};
 
-int BRIG_PrecacheModel(const char* model)
+static MapSoundReplacement g_mapSoundReplacements[256]{};
+static size_t g_mapSoundReplacementCount = 0;
+
+static bool MapProfiles_IsValidPlayerModelName(const char* modelName)
 {
-	if (!model)
-		return 0;
-
-	// Only swap first-person weapon models. World/player models stay untouched.
-	if (0 == strnicmp(model, "models/v_", 9))
-	{
-		const char* prefix = BRIG_GetMapViewModelPrefix();
-		if (prefix && 0 == strnicmp(prefix, "models/", 7) &&
-			BRIG_IsSafeAssetPrefix(prefix))
-		{
-			const char* baseName = strrchr(model, '/');
-			baseName = baseName ? baseName + 1 : model;
-			char profilePath[256];
-			const int written = snprintf(profilePath, sizeof(profilePath), "%s/%s", prefix, baseName);
-
-			if (written > 0 && (size_t)written < sizeof(profilePath))
-			{
-				int fileLength = 0;
-				byte* fileData = LOAD_FILE_FOR_ME(profilePath, &fileLength);
-				const bool exists = fileData != nullptr && fileLength > 0;
-				if (fileData)
-					FREE_FILE(fileData);
-
-				if (exists)
-					return g_engfuncs.pfnPrecacheModel(profilePath);
-			}
-		}
-	}
-
-	return g_engfuncs.pfnPrecacheModel((char*)model);
-}
-
-const char* BRIG_GetMapVoicePrefix()
-{
-	return CVAR_GET_STRING("brig_map_voice_prefix");
-}
-
-const char* BRIG_GetMapSoundPrefix()
-{
-	return CVAR_GET_STRING("brig_map_sound_prefix");
-}
-
-const char* BRIG_GetMapViewModelPrefix()
-{
-	return CVAR_GET_STRING("brig_map_viewmodel_prefix");
-}
-
-bool BRIG_IsSafeAssetPrefix(const char* prefix)
-{
-	if (!prefix || !*prefix)
-		return true;
-
-	if (*prefix == '/' || *prefix == '\\' || strstr(prefix, ".."))
+	if (!modelName || !*modelName || strlen(modelName) >= 32)
 		return false;
 
-	for (const unsigned char* p = (const unsigned char*)prefix; *p; ++p)
+	for (const unsigned char* p = (const unsigned char*)modelName; *p; ++p)
 	{
 		const unsigned char c = *p;
 		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '/'))
+			(c >= '0' && c <= '9') || c == '_' || c == '-'))
 		{
 			return false;
 		}
@@ -130,73 +78,346 @@ bool BRIG_IsSafeAssetPrefix(const char* prefix)
 	return true;
 }
 
-static unsigned int g_brigPlayerItemSpawnDepth = 0;
-
-void BRIG_BeginPlayerItemSpawn()
+static bool MapProfiles_NextListToken(const char** cursor, char* output, size_t outputSize)
 {
-	++g_brigPlayerItemSpawnDepth;
-}
+	if (!cursor || !*cursor || !output || outputSize < 2)
+		return false;
 
-void BRIG_EndPlayerItemSpawn()
-{
-	if (g_brigPlayerItemSpawnDepth > 0)
-		--g_brigPlayerItemSpawnDepth;
-}
+	const char* p = *cursor;
+	while (*p == ',' || *p == ';' || *p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')
+		++p;
 
-bool BRIG_IsPlayerItemSpawn()
-{
-	return g_brigPlayerItemSpawnDepth > 0;
-}
-
-bool BRIG_IsMapWeaponAllowed(const char* classname)
-{
-	if (!classname || !*classname)
-		return true;
-
-	const char* list = CVAR_GET_STRING("brig_map_weapon_allowlist");
-	if (!list || !*list || !stricmp(list, "*") || !stricmp(list, "all"))
-		return true;
-
-	const char* current = list;
-	bool hasToken = false;
-
-	while (*current)
+	if (!*p)
 	{
-		while (*current == ',' || *current == ';' || *current == ' ' ||
-			*current == '\t' || *current == '\r' || *current == '\n')
+		*cursor = p;
+		return false;
+	}
+
+	size_t length = 0;
+	while (*p && *p != ',' && *p != ';' && *p != ' ' && *p != '\t' && *p != '\r' && *p != '\n')
+	{
+		if (length + 1 >= outputSize)
 		{
-			++current;
+			while (*p && *p != ',' && *p != ';' && *p != ' ' && *p != '\t' && *p != '\r' && *p != '\n')
+				++p;
+			*cursor = p;
+			output[0] = '\0';
+			return false;
 		}
 
-		const char* token = current;
-		while (*current && *current != ',' && *current != ';' &&
-			*current != ' ' && *current != '\t' && *current != '\r' && *current != '\n')
-		{
-			++current;
-		}
+		output[length++] = *p++;
+	}
 
-		const size_t tokenLength = (size_t)(current - token);
-		if (tokenLength == 0)
-			continue;
+	output[length] = '\0';
+	*cursor = p;
+	return length > 0;
+}
 
-		hasToken = true;
-		if (strlen(classname) == tokenLength && 0 == strnicmp(classname, token, tokenLength))
+bool MapProfiles_IsPlayerModelAllowed(const char* modelName)
+{
+	if (!MapProfiles_IsValidPlayerModelName(modelName))
+		return false;
+
+	const char* allowedModels = CVAR_GET_STRING("forcepmodels");
+	if (!allowedModels || !*allowedModels)
+		return true;
+
+	const char* cursor = allowedModels;
+	char token[32];
+	while (MapProfiles_NextListToken(&cursor, token, sizeof(token)))
+	{
+		if (MapProfiles_IsValidPlayerModelName(token) && 0 == stricmp(token, modelName))
 			return true;
 	}
 
-	// A separator-only value is treated the same as an empty allowlist.
-	return !hasToken;
+	return false;
 }
 
-void BRIG_LoadMapProfile()
+const char* MapProfiles_GetFirstPlayerModel()
 {
-	CVAR_SET_STRING("brig_map_profile", "default");
-	CVAR_SET_STRING("brig_map_weapon_allowlist", "");
-	CVAR_SET_STRING("brig_map_player_model", "");
-	CVAR_SET_STRING("brig_map_voice_prefix", "");
-	CVAR_SET_STRING("brig_map_sound_prefix", "");
-	CVAR_SET_STRING("brig_map_viewmodel_prefix", "");
+	static char firstModel[32];
+	firstModel[0] = '\0';
 
+	const char* allowedModels = CVAR_GET_STRING("forcepmodels");
+	if (!allowedModels || !*allowedModels)
+		return nullptr;
+
+	const char* cursor = allowedModels;
+	char token[32];
+	while (MapProfiles_NextListToken(&cursor, token, sizeof(token)))
+	{
+		if (MapProfiles_IsValidPlayerModelName(token))
+		{
+			strncpy(firstModel, token, sizeof(firstModel) - 1);
+			firstModel[sizeof(firstModel) - 1] = '\0';
+			return firstModel;
+		}
+	}
+
+	return nullptr;
+}
+
+void MapProfiles_PrecachePlayerModels()
+{
+	const char* allowedModels = CVAR_GET_STRING("forcepmodels");
+	if (!allowedModels || !*allowedModels)
+		return;
+
+	const char* cursor = allowedModels;
+	char token[32];
+	while (MapProfiles_NextListToken(&cursor, token, sizeof(token)))
+	{
+		if (!MapProfiles_IsValidPlayerModelName(token))
+			continue;
+
+		char modelPath[96];
+		const int written = snprintf(modelPath, sizeof(modelPath),
+			"models/player/%s/%s.mdl", token, token);
+
+		if (written > 0 && (size_t)written < sizeof(modelPath))
+			g_engfuncs.pfnPrecacheModel(modelPath);
+	}
+}
+
+static bool MapProfiles_ContainsWeaponPath(const char* path)
+{
+	if (!path)
+		return false;
+
+	for (const char* p = path; *p; ++p)
+	{
+		if (0 == strnicmp(p, "weapon", 6))
+			return true;
+	}
+
+	return false;
+}
+
+static bool MapProfiles_IsSafeSoundResource(const char* resource, bool allowSentenceName)
+{
+	if (!resource || !*resource || strlen(resource) >= 128)
+		return false;
+
+	if (*resource == '!')
+	{
+		if (!allowSentenceName || !resource[1])
+			return false;
+
+		for (const unsigned char* p = (const unsigned char*)resource + 1; *p; ++p)
+		{
+			const unsigned char c = *p;
+			if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+				(c >= '0' && c <= '9') || c == '_'))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	if (*resource == '/' || *resource == '\\' || strstr(resource, "..") ||
+		strchr(resource, ':') || MapProfiles_ContainsWeaponPath(resource))
+	{
+		return false;
+	}
+
+	for (const unsigned char* p = (const unsigned char*)resource; *p; ++p)
+	{
+		const unsigned char c = *p;
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.' || c == '/'))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static bool MapProfiles_ReadQuotedToken(const byte* data, int dataLength, int& position,
+	char* output, size_t outputSize)
+{
+	if (!data || !output || outputSize < 2)
+		return false;
+
+	while (position < dataLength)
+	{
+		const unsigned char c = data[position];
+
+		if (c == '#' )
+		{
+			while (position < dataLength && data[position] != '\n')
+				++position;
+		}
+		else if (c == '/' && position + 1 < dataLength && data[position + 1] == '/')
+		{
+			while (position < dataLength && data[position] != '\n')
+				++position;
+		}
+		else if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
+		{
+			++position;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	if (position >= dataLength || data[position] != '"')
+		return false;
+
+	++position;
+	size_t length = 0;
+	while (position < dataLength && data[position] != '"')
+	{
+		const unsigned char c = data[position++];
+		if (c == '\r' || c == '\n' || length + 1 >= outputSize)
+			return false;
+
+		output[length++] = (char)c;
+	}
+
+	if (position >= dataLength || data[position] != '"' || length == 0)
+		return false;
+
+	++position;
+	output[length] = '\0';
+	return true;
+}
+
+const char* MapProfiles_FindSoundReplacement(const char* sample)
+{
+	if (!sample || !*sample)
+		return nullptr;
+
+	for (size_t i = 0; i < g_mapSoundReplacementCount; ++i)
+	{
+		if (0 == stricmp(g_mapSoundReplacements[i].source, sample))
+			return g_mapSoundReplacements[i].replacement;
+	}
+
+	return nullptr;
+}
+
+static bool MapProfiles_IsSafeSoundListPath(const char* path)
+{
+	if (!path || !*path || strlen(path) >= 128 || *path == '/' ||
+		*path == '\\' || strstr(path, "..") || strchr(path, ':'))
+	{
+		return false;
+	}
+
+	const size_t length = strlen(path);
+	if (length < 5 || 0 != stricmp(path + length - 4, ".gsr"))
+		return false;
+
+	for (const unsigned char* p = (const unsigned char*)path; *p; ++p)
+	{
+		const unsigned char c = *p;
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.' || c == '/'))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static void MapProfiles_LoadSoundList(const char* path)
+{
+	if (!MapProfiles_IsSafeSoundListPath(path))
+	{
+		ALERT(at_console, "Ignoring invalid global sound list path.\n");
+		return;
+	}
+
+	int dataLength = 0;
+	byte* data = LOAD_FILE_FOR_ME((char*)path, &dataLength);
+	if (!data || dataLength <= 0)
+	{
+		if (data)
+			FREE_FILE(data);
+		return;
+	}
+
+	int position = 0;
+	while (position < dataLength && g_mapSoundReplacementCount < ARRAYSIZE(g_mapSoundReplacements))
+	{
+		char source[128];
+		char replacement[128];
+
+		if (!MapProfiles_ReadQuotedToken(data, dataLength, position, source, sizeof(source)))
+			break;
+
+		if (!MapProfiles_ReadQuotedToken(data, dataLength, position, replacement, sizeof(replacement)))
+		{
+			ALERT(at_console, "Incomplete entry in %s.\n", path);
+			break;
+		}
+
+		if (!MapProfiles_IsSafeSoundResource(source, true) ||
+			!MapProfiles_IsSafeSoundResource(replacement, false))
+		{
+			ALERT(at_console, "Ignoring unsafe sound replacement in %s.\n", path);
+			continue;
+		}
+
+		MapSoundReplacement& entry = g_mapSoundReplacements[g_mapSoundReplacementCount++];
+		strncpy(entry.source, source, sizeof(entry.source) - 1);
+		entry.source[sizeof(entry.source) - 1] = '\0';
+		strncpy(entry.replacement, replacement, sizeof(entry.replacement) - 1);
+		entry.replacement[sizeof(entry.replacement) - 1] = '\0';
+	}
+
+	FREE_FILE(data);
+}
+
+int MapProfiles_PrecacheSound(const char* sample)
+{
+	if (!sample)
+		return 0;
+
+	const char* replacement = MapProfiles_FindSoundReplacement(sample);
+	if (replacement)
+		return g_engfuncs.pfnPrecacheSound((char*)replacement);
+
+	return g_engfuncs.pfnPrecacheSound((char*)sample);
+}
+
+void MapProfiles_PrecacheAllSounds()
+{
+	for (size_t i = 0; i < g_mapSoundReplacementCount; ++i)
+	{
+		const char* sample = g_mapSoundReplacements[i].replacement;
+		bool alreadyPrecached = false;
+
+		for (size_t j = 0; j < i; ++j)
+		{
+			if (0 == stricmp(g_mapSoundReplacements[j].replacement, sample))
+			{
+				alreadyPrecached = true;
+				break;
+			}
+		}
+
+		if (!alreadyPrecached)
+			g_engfuncs.pfnPrecacheSound((char*)sample);
+	}
+}
+
+void MapProfiles_Clear()
+{
+	CVAR_SET_STRING("forcepmodels", "");
+	CVAR_SET_STRING("globalsoundlist", "");
+	g_mapSoundReplacementCount = 0;
+	memset(g_mapSoundReplacements, 0, sizeof(g_mapSoundReplacements));
+}
+
+void MapProfiles_LoadForCurrentMap()
+{
 	const char* rawMapName = STRING(gpGlobals->mapname);
 	if (!rawMapName || !*rawMapName)
 		return;
@@ -208,7 +429,7 @@ void BRIG_LoadMapProfile()
 		const unsigned char c = *p;
 		if (length >= sizeof(mapName) - 1)
 		{
-			ALERT(at_console, "[Brig] Map name is too long for a profile.\\n");
+			ALERT(at_console, "Map name is too long for map configuration.\n");
 			return;
 		}
 
@@ -219,7 +440,7 @@ void BRIG_LoadMapProfile()
 		}
 		else
 		{
-			ALERT(at_console, "[Brig] Refusing unsafe map profile name.\n");
+			ALERT(at_console, "Refusing invalid map name for configuration.\n");
 			return;
 		}
 	}
@@ -228,12 +449,43 @@ void BRIG_LoadMapProfile()
 	if (length == 0)
 		return;
 
-	char command[128];
-	snprintf(command, sizeof(command), "exec maps/%s.cfg\n", mapName);
-	SERVER_COMMAND(command);
-	SERVER_EXECUTE();
+	if (!*CVAR_GET_STRING("globalsoundlist"))
+	{
+		char defaultSoundList[96];
+		snprintf(defaultSoundList, sizeof(defaultSoundList), "maps/%s.gsr", mapName);
+		CVAR_SET_STRING("globalsoundlist", defaultSoundList);
+	}
 
-	ALERT(at_console, "[Brig] Checked map presentation profile: maps/%s.cfg\n", mapName);
+	char configPath[96];
+	snprintf(configPath, sizeof(configPath), "maps/%s.cfg", mapName);
+	int configLength = 0;
+	byte* configData = LOAD_FILE_FOR_ME(configPath, &configLength);
+	if (configData)
+	{
+		FREE_FILE(configData);
+		char command[128];
+		snprintf(command, sizeof(command), "exec %s\n", configPath);
+		SERVER_COMMAND(command);
+		SERVER_EXECUTE();
+	}
+
+	const char* soundList = CVAR_GET_STRING("globalsoundlist");
+	if (soundList && *soundList)
+	{
+		char normalizedPath[128];
+		const char* pathToLoad = soundList;
+
+		// Accept the conventional relative map path used by map-authored configs.
+		if (0 == strnicmp(soundList, "../../maps/", 11))
+		{
+			snprintf(normalizedPath, sizeof(normalizedPath), "maps/%s", soundList + 11);
+			pathToLoad = normalizedPath;
+		}
+
+		MapProfiles_LoadSoundList(pathToLoad);
+	}
+
+	ALERT(at_console, "Loaded map settings for %s.\n", mapName);
 }
 
 //CVARS FOR SKILL LEVEL SETTINGS
