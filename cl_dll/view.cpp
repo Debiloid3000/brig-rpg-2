@@ -734,9 +734,9 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 
 	// User-configurable first-person weapon placement. These offsets only affect
 	// the viewmodel and never move the player's camera origin.
-	const float offsetX = V_ClampViewModelValue(viewmodel_offset_x->value, -20.0f, 20.0f);
-	const float offsetY = V_ClampViewModelValue(viewmodel_offset_y->value, -20.0f, 20.0f);
-	const float offsetZ = V_ClampViewModelValue(viewmodel_offset_z->value, -20.0f, 20.0f);
+	const float offsetX = V_ClampViewModelValue(viewmodel_offset_x->value, -2.0f, 2.5f);
+	const float offsetY = V_ClampViewModelValue(viewmodel_offset_y->value, -2.0f, 2.0f);
+	const float offsetZ = V_ClampViewModelValue(viewmodel_offset_z->value, -2.0f, 2.0f);
 	float viewModelForward[3], viewModelRight[3], viewModelUp[3];
 	AngleVectors(view->angles, viewModelForward, viewModelRight, viewModelUp);
 
@@ -750,7 +750,7 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 	// viewmodel geometry in the client studio renderer to approximate CS-style
 	// independent weapon FOV without changing the world/camera FOV.
 	const float requestedViewModelFov =
-		V_ClampViewModelValue(viewmodel_fov->value, 54.0f, 120.0f);
+		V_ClampViewModelValue(viewmodel_fov->value, 54.0f, 68.0f);
 	const float referenceHalfAngle = 68.0f * 0.00872664625f;
 	const float requestedHalfAngle = requestedViewModelFov * 0.00872664625f;
 	view->curstate.scale = tanf(referenceHalfAngle) / tanf(requestedHalfAngle);
