@@ -21,6 +21,11 @@
 #include "StudioModelRenderer.h"
 #include "GameStudioModelRenderer.h"
 
+extern cvar_t* viewmodel_fov;
+extern cvar_t* viewmodel_offset_x;
+extern cvar_t* viewmodel_offset_y;
+extern cvar_t* viewmodel_offset_z;
+
 extern cvar_t* tfc_newmodels;
 
 extern extra_player_info_t g_PlayerExtraInfo[MAX_PLAYERS_HUD + 1];
@@ -433,10 +438,8 @@ void CStudioModelRenderer::StudioSetUpTransform(bool trivial_accept)
 	Vector angles;
 	Vector modelpos;
 
-	// tweek model origin
-	//for (i = 0; i < 3; i++)
-	//	modelpos[i] = m_pCurrentEntity->origin[i];
-
+	// Use the renderer's current model origin. For viewmodels, apply client
+	// offsets here so they affect the entity that is actually being drawn.
 	VectorCopy(m_pCurrentEntity->origin, modelpos);
 
 	// TODO: should really be stored with the entity instead of being reconstructed
@@ -522,12 +525,36 @@ void CStudioModelRenderer::StudioSetUpTransform(bool trivial_accept)
 	angles[PITCH] = -angles[PITCH];
 	AngleMatrix(angles, (*m_protationmatrix));
 
-	// The engine's viewmodel is rendered by this client-side studio renderer.
-	// Apply its FOV-like scale only to that entity, leaving world/player models
-	// and their transforms untouched.
-	if (m_pCurrentEntity == gEngfuncs.GetViewModel())
+	// GoldSrc can hand the Studio renderer a viewmodel entity wrapper rather
+	// than the exact pointer returned by GetViewModel(). Match the loaded model
+	// as well, so the controls do not silently stop working on a copied entity.
+	cl_entity_t* viewModel = gEngfuncs.GetViewModel();
+	const bool isViewModel = viewModel && viewModel->model &&
+		(m_pCurrentEntity == viewModel || m_pCurrentEntity->model == viewModel->model);
+
+	if (isViewModel)
 	{
-		const float viewModelScale = m_pCurrentEntity->curstate.scale;
+		const float offsetX = viewmodel_offset_x
+			? max(-2.0f, min(2.5f, viewmodel_offset_x->value)) : 0.0f;
+		const float offsetY = viewmodel_offset_y
+			? max(-2.0f, min(2.0f, viewmodel_offset_y->value)) : 0.0f;
+		const float offsetZ = viewmodel_offset_z
+			? max(-2.0f, min(2.0f, viewmodel_offset_z->value)) : 0.0f;
+
+		float viewForward[3], viewRight[3], viewUp[3];
+		AngleVectors(m_pCurrentEntity->angles, viewForward, viewRight, viewUp);
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			modelpos[axis] += viewRight[axis] * offsetX +
+				viewForward[axis] * offsetY + viewUp[axis] * offsetZ;
+		}
+
+		const float requestedFov = viewmodel_fov
+			? max(54.0f, min(68.0f, viewmodel_fov->value)) : 68.0f;
+		const float referenceHalfAngle = 68.0f * 0.00872664625f;
+		const float requestedHalfAngle = requestedFov * 0.00872664625f;
+		const float viewModelScale = tanf(referenceHalfAngle) / tanf(requestedHalfAngle);
+
 		if (viewModelScale > 0.0f && viewModelScale != 1.0f)
 		{
 			for (int row = 0; row < 3; ++row)
