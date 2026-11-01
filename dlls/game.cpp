@@ -47,6 +47,139 @@ cvar_t mp_chattime = {"mp_chattime", "10", FCVAR_SERVER};
 
 cvar_t sv_allowbunnyhopping = {"sv_allowbunnyhopping", "0", FCVAR_SERVER};
 
+cvar_t brig_map_profile = {"brig_map_profile", "default", FCVAR_SERVER};
+cvar_t brig_map_weapon_allowlist = {"brig_map_weapon_allowlist", "", FCVAR_SERVER};
+cvar_t brig_map_player_model = {"brig_map_player_model", "", FCVAR_SERVER};
+cvar_t brig_map_voice_prefix = {"brig_map_voice_prefix", "", FCVAR_SERVER};
+cvar_t brig_map_sound_prefix = {"brig_map_sound_prefix", "", FCVAR_SERVER};
+cvar_t brig_map_viewmodel_prefix = {"brig_map_viewmodel_prefix", "", FCVAR_SERVER};
+
+const char* BRIG_GetMapPlayerModel()
+{
+	return CVAR_GET_STRING("brig_map_player_model");
+}
+
+const char* BRIG_GetMapVoicePrefix()
+{
+	return CVAR_GET_STRING("brig_map_voice_prefix");
+}
+
+const char* BRIG_GetMapSoundPrefix()
+{
+	return CVAR_GET_STRING("brig_map_sound_prefix");
+}
+
+const char* BRIG_GetMapViewModelPrefix()
+{
+	return CVAR_GET_STRING("brig_map_viewmodel_prefix");
+}
+
+bool BRIG_IsSafeAssetPrefix(const char* prefix)
+{
+	if (!prefix || !*prefix)
+		return true;
+
+	if (*prefix == '/' || *prefix == '\\' || strstr(prefix, ".."))
+		return false;
+
+	for (const unsigned char* p = (const unsigned char*)prefix; *p; ++p)
+	{
+		const unsigned char c = *p;
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '/'))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool BRIG_IsMapWeaponAllowed(const char* classname)
+{
+	if (!classname || !*classname)
+		return true;
+
+	const char* list = CVAR_GET_STRING("brig_map_weapon_allowlist");
+	if (!list || !*list || !stricmp(list, "*") || !stricmp(list, "all"))
+		return true;
+
+	const char* current = list;
+	bool hasToken = false;
+
+	while (*current)
+	{
+		while (*current == ',' || *current == ';' || *current == ' ' ||
+			*current == '\\t' || *current == '\\r' || *current == '\\n')
+		{
+			++current;
+		}
+
+		const char* token = current;
+		while (*current && *current != ',' && *current != ';' &&
+			*current != ' ' && *current != '\\t' && *current != '\\r' && *current != '\\n')
+		{
+			++current;
+		}
+
+		const size_t tokenLength = (size_t)(current - token);
+		if (tokenLength == 0)
+			continue;
+
+		hasToken = true;
+		if (strlen(classname) == tokenLength && 0 == strnicmp(classname, token, tokenLength))
+			return true;
+	}
+
+	// A separator-only value is treated the same as an empty allowlist.
+	return !hasToken;
+}
+
+void BRIG_LoadMapProfile()
+{
+	CVAR_SET_STRING("brig_map_profile", "default");
+	CVAR_SET_STRING("brig_map_weapon_allowlist", "");
+	CVAR_SET_STRING("brig_map_player_model", "");
+	CVAR_SET_STRING("brig_map_voice_prefix", "");
+	CVAR_SET_STRING("brig_map_sound_prefix", "");
+	CVAR_SET_STRING("brig_map_viewmodel_prefix", "");
+
+	const char* rawMapName = STRING(gpGlobals->mapname);
+	if (!rawMapName || !*rawMapName)
+		return;
+
+	char mapName[64]{};
+	size_t length = 0;
+	for (const unsigned char* p = (const unsigned char*)rawMapName; *p; ++p)
+	{
+		const unsigned char c = *p;
+		if (length >= sizeof(mapName) - 1)
+			break;
+
+		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' || c == '-')
+		{
+			mapName[length++] = (char)((c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c);
+		}
+		else
+		{
+			ALERT(at_console, "[Brig] Refusing unsafe map profile name.\\n");
+			return;
+		}
+	}
+
+	mapName[length] = '\\0';
+	if (length == 0)
+		return;
+
+	char command[128];
+	snprintf(command, sizeof(command), "exec maps/%s.cfg\\n", mapName);
+	SERVER_COMMAND(command);
+	SERVER_EXECUTE();
+
+	ALERT(at_console, "[Brig] Checked map presentation profile: maps/%s.cfg\\n", mapName);
+}
+
 //CVARS FOR SKILL LEVEL SETTINGS
 // Agrunt
 cvar_t sk_agrunt_health1 = {"sk_agrunt_health1", "0"};
@@ -515,6 +648,13 @@ void GameDLLInit()
 	CVAR_REGISTER(&mp_chattime);
 
 	CVAR_REGISTER(&sv_allowbunnyhopping);
+
+	CVAR_REGISTER(&brig_map_profile);
+	CVAR_REGISTER(&brig_map_weapon_allowlist);
+	CVAR_REGISTER(&brig_map_player_model);
+	CVAR_REGISTER(&brig_map_voice_prefix);
+	CVAR_REGISTER(&brig_map_sound_prefix);
+	CVAR_REGISTER(&brig_map_viewmodel_prefix);
 
 	// REGISTER CVARS FOR SKILL LEVEL STUFF
 	// Agrunt
