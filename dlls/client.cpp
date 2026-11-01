@@ -509,17 +509,6 @@ void ClientCommand(edict_t* pEntity)
 	if (!pEntity->pvPrivateData)
 		return;
 
-	// A map profile may force a model directory for this map only.
-	const char* mapPlayerModel = BRIG_GetMapPlayerModel();
-	if (BRIG_IsValidPlayerModelName(mapPlayerModel))
-	{
-		const char* currentModel = g_engfuncs.pfnInfoKeyValue(infobuffer, "model");
-		if (!currentModel || !FStrEq(currentModel, mapPlayerModel))
-		{
-			g_engfuncs.pfnSetClientKeyValue(ENTINDEX(pEntity), infobuffer, "model", mapPlayerModel);
-		}
-	}
-
 	entvars_t* pev = &pEntity->v;
 
 	auto player = GetClassPtr<CBasePlayer>(reinterpret_cast<CBasePlayer*>(&pEntity->v));
@@ -654,6 +643,17 @@ void ClientUserInfoChanged(edict_t* pEntity, char* infobuffer)
 	// Is the client spawned yet?
 	if (!pEntity->pvPrivateData)
 		return;
+
+	// A map profile may force a model directory for this map only.
+	const char* mapPlayerModel = BRIG_GetMapPlayerModel();
+	if (BRIG_IsValidPlayerModelName(mapPlayerModel))
+	{
+		const char* currentModel = g_engfuncs.pfnInfoKeyValue(infobuffer, "model");
+		if (!currentModel || !FStrEq(currentModel, mapPlayerModel))
+		{
+			g_engfuncs.pfnSetClientKeyValue(ENTINDEX(pEntity), infobuffer, "model", mapPlayerModel);
+		}
+	}
 
 	// msg everyone if someone changes their name,  and it isn't the first time (changing no name to current name)
 	if (!FStringNull(pEntity->v.netname) && STRING(pEntity->v.netname)[0] != 0 && !FStrEq(STRING(pEntity->v.netname), g_engfuncs.pfnInfoKeyValue(infobuffer, "name")))
