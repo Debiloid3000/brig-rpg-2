@@ -101,19 +101,19 @@ static void V_ViewModelHelp()
 {
 	if (!viewmodel_fov || !viewmodel_offset_x || !viewmodel_offset_y || !viewmodel_offset_z)
 	{
-		gEngfuncs.Con_Printf("Viewmodel settings are not initialized.\\n");
+		gEngfuncs.Con_Printf("Viewmodel settings are not initialized.\n");
 		return;
 	}
 
-	gEngfuncs.Con_Printf("Viewmodel client settings:\\n");
-	gEngfuncs.Con_Printf("viewmodel_fov %.1f (54-68)\\n", viewmodel_fov->value);
-	gEngfuncs.Con_Printf("viewmodel_offset_x %.2f (-2 to 2.5)\\n", viewmodel_offset_x->value);
-	gEngfuncs.Con_Printf("viewmodel_offset_y %.2f (-2 to 2)\\n", viewmodel_offset_y->value);
-	gEngfuncs.Con_Printf("viewmodel_offset_z %.2f (-2 to 2)\\n", viewmodel_offset_z->value);
+	gEngfuncs.Con_Printf("Viewmodel client settings:\n");
+	gEngfuncs.Con_Printf("viewmodel_fov %.1f (54-68)\n", viewmodel_fov->value);
+	gEngfuncs.Con_Printf("viewmodel_offset_x %.2f (-2 to 2.5)\n", viewmodel_offset_x->value);
+	gEngfuncs.Con_Printf("viewmodel_offset_y %.2f (-2 to 2)\n", viewmodel_offset_y->value);
+	gEngfuncs.Con_Printf("viewmodel_offset_z %.2f (-2 to 2)\n", viewmodel_offset_z->value);
 	cl_entity_t* viewModel = gEngfuncs.GetViewModel();
-	gEngfuncs.Con_Printf("Model: %s\\n",
+	gEngfuncs.Con_Printf("Model: %s\n",
 		(viewModel && viewModel->model) ? viewModel->model->name : "<not loaded>");
-	gEngfuncs.Con_Printf("Presets: viewmodel_presetpos 1, 2 or 3\\n");
+	gEngfuncs.Con_Printf("Presets: viewmodel_presetpos 1, 2 or 3\n");
 }
 
 static void V_SetViewModelPreset()
