@@ -89,6 +89,12 @@ cvar_t* cl_bobup;
 cvar_t* cl_waterdist;
 cvar_t* cl_chasedist;
 
+cvar_t* viewmodel_offset_x = nullptr;
+cvar_t* viewmodel_offset_y = nullptr;
+cvar_t* viewmodel_offset_z = nullptr;
+cvar_t* viewmodel_fov = nullptr;
+static bool g_bViewInitialized = false;
+
 // These cvars are not registered (so users can't cheat), so set the ->value field directly
 // Register these cvars in V_Init() if needed for easy tweaking
 cvar_t v_iyaw_cycle = {"v_iyaw_cycle", "2", 0, 2};
@@ -688,6 +694,33 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 	else if (pparams->viewsize == 80)
 	{
 		view->origin[2] += 0.5;
+	}
+
+	// CS-style viewmodel positioning. These offsets move only the first-person
+	// weapon model; the player's camera origin remains unchanged.
+	if (viewmodel_offset_x && viewmodel_offset_y && viewmodel_offset_z)
+	{
+		const float offsetX = max(-2.0f, min(2.5f, viewmodel_offset_x->value));
+		const float offsetY = max(-2.0f, min(2.0f, viewmodel_offset_y->value));
+		const float offsetZ = max(-2.0f, min(2.0f, viewmodel_offset_z->value));
+		float vmForward[3], vmRight[3], vmUp[3];
+		AngleVectors(view->angles, vmForward, vmRight, vmUp);
+
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			view->origin[axis] += vmRight[axis] * offsetX +
+				vmForward[axis] * offsetY + vmUp[axis] * offsetZ;
+		}
+	}
+
+	// GoldSrc's client DLL does not own the renderer's projection matrix, so this
+	// is a viewmodel-size approximation rather than an independent render FOV.
+	if (viewmodel_fov)
+	{
+		const float requestedFov = max(54.0f, min(68.0f, viewmodel_fov->value));
+		const float referenceHalfAngle = 68.0f * 0.00872664625f;
+		const float requestedHalfAngle = requestedFov * 0.00872664625f;
+		view->curstate.scale = tanf(referenceHalfAngle) / tanf(requestedHalfAngle);
 	}
 
 	// Add in the punchangle, if any
@@ -1694,6 +1727,10 @@ V_Init
 */
 void V_Init()
 {
+	if (g_bViewInitialized)
+		return;
+
+	g_bViewInitialized = true;
 	gEngfuncs.pfnAddCommand("centerview", V_StartPitchDrift);
 
 	scr_ofsx = gEngfuncs.pfnRegisterVariable("scr_ofsx", "0", 0);
@@ -1708,6 +1745,11 @@ void V_Init()
 	cl_bobup = gEngfuncs.pfnRegisterVariable("cl_bobup", "0.5", 0);
 	cl_waterdist = gEngfuncs.pfnRegisterVariable("cl_waterdist", "4", 0);
 	cl_chasedist = gEngfuncs.pfnRegisterVariable("cl_chasedist", "112", 0);
+
+	viewmodel_offset_x = gEngfuncs.pfnRegisterVariable("viewmodel_offset_x", "0", FCVAR_ARCHIVE);
+	viewmodel_offset_y = gEngfuncs.pfnRegisterVariable("viewmodel_offset_y", "0", FCVAR_ARCHIVE);
+	viewmodel_offset_z = gEngfuncs.pfnRegisterVariable("viewmodel_offset_z", "0", FCVAR_ARCHIVE);
+	viewmodel_fov = gEngfuncs.pfnRegisterVariable("viewmodel_fov", "68", FCVAR_ARCHIVE);
 }
 
 
