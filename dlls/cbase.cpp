@@ -151,19 +151,6 @@ int DispatchSpawn(edict_t* pent)
 		pEntity->pev->absmin = pEntity->pev->origin - Vector(1, 1, 1);
 		pEntity->pev->absmax = pEntity->pev->origin + Vector(1, 1, 1);
 
-		// Map weapon allowlists apply only to actual spawned entities. Weapon precache
-		// helpers do not pass through DispatchSpawn, so their metadata remains available.
-		if (!BRIG_IsPlayerItemSpawn() && !FStringNull(pEntity->pev->classname))
-		{
-			const char* classname = STRING(pEntity->pev->classname);
-			if (classname && 0 == strnicmp(classname, "weapon_", 7) &&
-				!BRIG_IsMapWeaponAllowed(classname))
-			{
-				ALERT(at_console, "[Brig] Blocked map weapon %s by map profile.\n", classname);
-				return -1;
-			}
-		}
-
 		pEntity->Spawn();
 
 		// Try to get the pointer again, in case the spawn function deleted the entity.
