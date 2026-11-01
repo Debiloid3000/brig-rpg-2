@@ -525,6 +525,9 @@ void CWorld::Precache()
 
 	g_pGameRules = InstallGameRules();
 
+	// Load per-map policy and presentation overrides before weapon/sentence precaching.
+	BRIG_LoadMapProfile();
+
 	//!!!UNDONE why is there so much Spawn code in the Precache function? I'll just keep it here
 
 	///!!!LATER - do we want a sound ent in deathmatch? (sjb)
