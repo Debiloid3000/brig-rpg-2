@@ -7,5 +7,6 @@
 
 #pragma once
 
+void V_Init();
 void V_StartPitchDrift();
 void V_StopPitchDrift();
