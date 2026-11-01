@@ -535,12 +535,19 @@ void CStudioModelRenderer::StudioSetUpTransform(bool trivial_accept)
 	angles[PITCH] = -angles[PITCH];
 	AngleMatrix(angles, (*m_protationmatrix));
 
-	// GoldSrc can hand the Studio renderer a viewmodel entity wrapper rather
-	// than the exact pointer returned by GetViewModel(). Match the loaded model
-	// as well, so the controls do not silently stop working on a copied entity.
+	// Identify the first-person viewmodel robustly. The engine may pass a
+	// copied entity to the Studio renderer, so pointer equality alone is not
+	// reliable. GoldSrc first-person weapon models use the models/v_ prefix.
 	cl_entity_t* viewModel = gEngfuncs.GetViewModel();
-	const bool isViewModel = viewModel && viewModel->model &&
-		(m_pCurrentEntity == viewModel || m_pCurrentEntity->model == viewModel->model);
+	const char* renderedModelName =
+		(m_pCurrentEntity && m_pCurrentEntity->model) ? m_pCurrentEntity->model->name : nullptr;
+	const bool hasViewModelName = renderedModelName &&
+		0 == strnicmp(renderedModelName, "models/v_", 9);
+	const bool isViewModel = hasViewModelName ||
+		(viewModel && viewModel->model &&
+			(m_pCurrentEntity == viewModel || m_pCurrentEntity->model == viewModel->model ||
+			 (viewModel->curstate.modelindex != 0 &&
+			  m_pCurrentEntity->curstate.modelindex == viewModel->curstate.modelindex)));
 
 	if (isViewModel)
 	{
@@ -551,12 +558,13 @@ void CStudioModelRenderer::StudioSetUpTransform(bool trivial_accept)
 		const float offsetZ = viewmodel_offset_z
 			? StudioClampViewModelValue(viewmodel_offset_z->value, -2.0f, 2.0f) : 0.0f;
 
-		float viewForward[3], viewRight[3], viewUp[3];
-		AngleVectors(m_pCurrentEntity->angles, viewForward, viewRight, viewUp);
+		// The renderer already has the camera's view basis from GetViewInfo.
+		// Apply offsets in that basis so X/Y/Z retain consistent screen-relative
+		// meaning regardless of the current weapon entity's internal angles.
 		for (int axis = 0; axis < 3; ++axis)
 		{
-			modelpos[axis] += viewRight[axis] * offsetX +
-				viewForward[axis] * offsetY + viewUp[axis] * offsetZ;
+			modelpos[axis] += m_vRight[axis] * offsetX +
+				m_vNormal[axis] * offsetY + m_vUp[axis] * offsetZ;
 		}
 
 		const float requestedFov = viewmodel_fov
