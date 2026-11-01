@@ -61,12 +61,12 @@ These are personal client settings, not map-profile options. They are registered
 | Cvar | Default | Purpose | Accepted range |
 | --- | ---: | --- | ---: |
 | `default_fov` | 90 | Player/world camera FOV | Existing game limits |
-| `viewmodel_fov` | 68 | First-person viewmodel scale/FOV approximation | 54–120 |
-| `viewmodel_offset_x` | 0 | Horizontal viewmodel offset | -20 to 20 |
-| `viewmodel_offset_y` | 0 | Forward/back viewmodel offset | -20 to 20 |
-| `viewmodel_offset_z` | 0 | Vertical viewmodel offset | -20 to 20 |
+| `viewmodel_fov` | 68 | First-person weapon model size | 54–68 |
+| `viewmodel_offset_x` | 0 | Move weapon left/right | -2 to 2.5 |
+| `viewmodel_offset_y` | 0 | Move weapon forward/back | -2 to 2 |
+| `viewmodel_offset_z` | 0 | Move weapon down/up | -2 to 2 |
 
-The offsets are applied to the viewmodel only; they do not move the player's camera. The cvars are archived, so a player's chosen values persist after they change them. The wider offset range is measured in GoldSrc world units. `viewmodel_fov` uses 68 as its neutral reference: values below 68 enlarge the viewmodel, while values above 68 shrink it.
+The offsets are applied to the viewmodel only; they do not move the player's camera. The cvars are archived, so a player's chosen values persist after they change them.
 
 `viewmodel_fov` is implemented as a viewmodel-only geometry scale in the client Studio renderer. It changes the apparent size of the hands/weapon without changing the world-camera `default_fov`. GoldSrc exposes a shared scene projection through this client interface, so this is an FOV-style visual control rather than a separate renderer projection matrix identical to CS2.
 
