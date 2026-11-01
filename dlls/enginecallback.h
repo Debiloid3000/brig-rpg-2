@@ -21,18 +21,13 @@
 // Holds engine functionality callbacks
 inline enginefuncs_t g_engfuncs;
 
-// The actual engine callbacks
-#define GETPLAYERUSERID (*g_engfuncs.pfnGetPlayerUserId)
-// The client DLL uses the stock client weapon precache callbacks.
-// Only the server DLL applies map-specific model and sound substitutions.
-#ifdef CLIENT_DLL
+// The server DLL applies map-specific non-weapon sound replacements.
 #define PRECACHE_MODEL (*g_engfuncs.pfnPrecacheModel)
+#ifdef CLIENT_DLL
 #define PRECACHE_SOUND (*g_engfuncs.pfnPrecacheSound)
 #else
-int BRIG_PrecacheModel(const char* model);
-#define PRECACHE_MODEL BRIG_PrecacheModel
-int BRIG_PrecacheSound(const char* sample);
-#define PRECACHE_SOUND BRIG_PrecacheSound
+int MapProfiles_PrecacheSound(const char* sample);
+#define PRECACHE_SOUND MapProfiles_PrecacheSound
 #endif
 #define PRECACHE_GENERIC (*g_engfuncs.pfnPrecacheGeneric)
 #define SET_MODEL (*g_engfuncs.pfnSetModel)
