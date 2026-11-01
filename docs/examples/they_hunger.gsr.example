@@ -1,0 +1,5 @@
+// Example maps/they_hunger.gsr
+// Replacement paths are relative to the mod's sound/ folder.
+"aslave/slv_alert1.wav" "they_hunger/slv_alert1.wav"
+"scientist/sci_pain1.wav" "they_hunger/sci_pain1.wav"
+"!SC_HEAL2" "they_hunger/sc_heal2.wav"
