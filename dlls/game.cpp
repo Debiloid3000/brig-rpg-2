@@ -168,7 +168,7 @@ void BRIG_LoadMapProfile()
 		}
 	}
 
-	mapName[length] = '\\0';
+	mapName[length] = '\0';
 	if (length == 0)
 		return;
 
