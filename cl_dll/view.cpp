@@ -129,7 +129,7 @@ static void V_SetViewModelPreset()
 		commands = "viewmodel_offset_x -1\nviewmodel_offset_y -1\nviewmodel_offset_z -0.5\nviewmodel_fov 68\n";
 		break;
 	default:
-		gEngfuncs.Con_Printf("Usage: viewmodel_presetpos <1|2|3>\\n");
+		gEngfuncs.Con_Printf("Usage: viewmodel_presetpos <1|2|3>\n");
 		return;
 	}
 
