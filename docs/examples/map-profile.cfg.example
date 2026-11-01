@@ -1,6 +1,7 @@
 // Example maps/<mapname>.cfg
-// Replace the example folder names with folders that exist in models/player.
+// Use player-model folder names that exist under models/player.
 forcepmodels "survivor_a,survivor_b,scientist"
 
-// One list contains both ordinary sound-path and named-sentence replacements.
-globalsoundlist "maps/they_hunger.gsr"
+// One list handles ordinary non-weapon audio and named sentence replacements.
+// Relative to sound/: sound/<mapname>/soundrep.txt
+globalsoundlist "<mapname>/soundrep.txt"
