@@ -509,6 +509,17 @@ void ClientCommand(edict_t* pEntity)
 	if (!pEntity->pvPrivateData)
 		return;
 
+	// A map profile may force a model directory for this map only.
+	const char* mapPlayerModel = BRIG_GetMapPlayerModel();
+	if (BRIG_IsValidPlayerModelName(mapPlayerModel))
+	{
+		const char* currentModel = g_engfuncs.pfnInfoKeyValue(infobuffer, "model");
+		if (!currentModel || !FStrEq(currentModel, mapPlayerModel))
+		{
+			g_engfuncs.pfnSetClientKeyValue(ENTINDEX(pEntity), infobuffer, "model", mapPlayerModel);
+		}
+	}
+
 	entvars_t* pev = &pEntity->v;
 
 	auto player = GetClassPtr<CBasePlayer>(reinterpret_cast<CBasePlayer*>(&pEntity->v));
@@ -620,6 +631,24 @@ userinfo - gives dll a chance to modify it before
 it gets sent into the rest of the engine.
 ========================
 */
+static bool BRIG_IsValidPlayerModelName(const char* modelName)
+{
+	if (!modelName || !*modelName || strlen(modelName) >= 32)
+		return false;
+
+	for (const unsigned char* p = (const unsigned char*)modelName; *p; ++p)
+	{
+		const unsigned char c = *p;
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' || c == '-'))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
 void ClientUserInfoChanged(edict_t* pEntity, char* infobuffer)
 {
 	// Is the client spawned yet?
