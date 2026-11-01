@@ -18,6 +18,7 @@
 #include "client.h"
 #include "game.h"
 #include "filesystem_utils.h"
+#include <stdio.h>
 
 cvar_t displaysoundlist = {"displaysoundlist", "0"};
 
@@ -154,7 +155,10 @@ void BRIG_LoadMapProfile()
 	{
 		const unsigned char c = *p;
 		if (length >= sizeof(mapName) - 1)
-			break;
+		{
+			ALERT(at_console, "[Brig] Map name is too long for a profile.\\n");
+			return;
+		}
 
 		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 			(c >= '0' && c <= '9') || c == '_' || c == '-')
