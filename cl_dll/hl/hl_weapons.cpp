@@ -27,6 +27,9 @@
 #include "r_efx.h"
 
 #include "cl_dll.h"
+#include "cl_util.h"
+#include <stdio.h>
+#include <string.h>
 #include "../com_weapons.h"
 #include "../demo.h"
 
@@ -92,10 +95,58 @@ bool bIsMultiplayer()
 {
 	return gEngfuncs.GetMaxClients() != 1;
 }
-//Just loads a v_ model.
+// Load a map-profile replacement viewmodel when it exists, otherwise retain
+// the weapon's original model. The profile directory contains matching v_*.mdl files.
+static bool BRIG_IsSafeClientViewModelPrefix(const char* prefix)
+{
+	if (!prefix || !*prefix || strstr(prefix, "..") || *prefix == '/' || *prefix == '\\')
+		return false;
+
+	for (const unsigned char* p = (const unsigned char*)prefix; *p; ++p)
+	{
+		const unsigned char c = *p;
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '/'))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static void BRIG_LoadViewModel(const char* szViewModel, CBasePlayer* m_pPlayer)
+{
+	if (!szViewModel || !m_pPlayer)
+		return;
+
+	const char* prefix = CVAR_GET_STRING("brig_viewmodel_prefix");
+	if (BRIG_IsSafeClientViewModelPrefix(prefix))
+	{
+		const char* baseName = strrchr(szViewModel, '/');
+		baseName = baseName ? baseName + 1 : szViewModel;
+
+		char profilePath[256];
+		const int written = snprintf(profilePath, sizeof(profilePath), "%s/%s", prefix, baseName);
+		if (written > 0 && (size_t)written < sizeof(profilePath))
+		{
+			int profileModelIndex = 0;
+			gEngfuncs.CL_LoadModel(profilePath, &profileModelIndex);
+			if (profileModelIndex != 0)
+			{
+				m_pPlayer->pev->viewmodel = profileModelIndex;
+				return;
+			}
+		}
+	}
+
+	gEngfuncs.CL_LoadModel(szViewModel, &m_pPlayer->pev->viewmodel);
+}
+
+// Public helper used by event code that requests a viewmodel by filename.
 void LoadVModel(const char* szViewModel, CBasePlayer* m_pPlayer)
 {
-	gEngfuncs.CL_LoadModel(szViewModel, &m_pPlayer->pev->viewmodel);
+	BRIG_LoadViewModel(szViewModel, m_pPlayer);
 }
 
 /*
@@ -165,7 +216,7 @@ bool CBasePlayerWeapon::DefaultDeploy(const char* szViewModel, const char* szWea
 	if (!CanDeploy())
 		return false;
 
-	gEngfuncs.CL_LoadModel(szViewModel, &m_pPlayer->pev->viewmodel);
+	BRIG_LoadViewModel(szViewModel, m_pPlayer);
 
 	SendWeaponAnim(iAnim, body);
 
