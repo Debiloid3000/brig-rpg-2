@@ -1558,7 +1558,21 @@ void EMIT_SOUND_PREDICTED(edict_t* entity, int channel, const char* sample, floa
 	//If entity is not a player this will return false.
 	if (0 != g_engfuncs.pfnCanSkipPlayer(entity))
 	{
-		pmove->PM_PlaySound(channel, sample, volume, attenuation, flags, pitch);
+		char profilePath[256];
+		char sentenceName[32];
+		const char* resolvedSample = sample;
+
+		if (sample && *sample == '!')
+		{
+			if (SENTENCEG_Lookup(sample, sentenceName) >= 0)
+				resolvedSample = sentenceName;
+		}
+		else if (BRIG_ProfileSoundPath(sample, profilePath, sizeof(profilePath)))
+		{
+			resolvedSample = profilePath;
+		}
+
+		pmove->PM_PlaySound(channel, resolvedSample, volume, attenuation, flags, pitch);
 	}
 	else
 	{
