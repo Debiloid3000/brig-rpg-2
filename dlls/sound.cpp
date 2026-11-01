@@ -91,7 +91,7 @@ static bool BRIG_ProfileSoundPath(const char* sample, char* output, size_t outpu
 	{
 		BRIGProfileSoundCacheEntry& entry = g_brigProfileSoundCache[g_brigProfileSoundCacheCount++];
 		strncpy(entry.path, output, sizeof(entry.path) - 1);
-		entry.path[sizeof(entry.path) - 1] = '\\0';
+		entry.path[sizeof(entry.path) - 1] = '\0';
 		entry.exists = exists;
 	}
 
