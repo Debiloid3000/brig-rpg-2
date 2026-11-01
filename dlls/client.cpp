@@ -1040,6 +1040,17 @@ void ClientPrecache()
 
 	PRECACHE_MODEL("models/player.mdl");
 
+	// The active map profile may force a player model folder. Precache that
+	// exact GoldSrc player model before clients receive the userinfo override.
+	const char* mapPlayerModel = BRIG_GetMapPlayerModel();
+	if (BRIG_IsValidPlayerModelName(mapPlayerModel))
+	{
+		char mapPlayerModelPath[96];
+		snprintf(mapPlayerModelPath, sizeof(mapPlayerModelPath),
+			"models/player/%s/%s.mdl", mapPlayerModel, mapPlayerModel);
+		PRECACHE_MODEL(mapPlayerModelPath);
+	}
+
 	// hud sounds
 
 	PRECACHE_SOUND("common/wpn_hudoff.wav");
