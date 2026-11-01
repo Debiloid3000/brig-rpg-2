@@ -1,110 +1,84 @@
-# Map presentation profiles
+# Map-local player models, sounds and dialogue
 
-A map presentation profile is a small server-side config file that is loaded automatically when a map starts. It lets a map choose its weapon pickups, player model folder, first-person weapon model folder, sound set and sentence-group aliases without turning the map into a separate game mode.
+The project uses the same map-local pattern as GoldSrc map configuration: a map can have a CFG for settings and one shared sound replacement list for ordinary audio and named sentence lines.
 
-## Player view settings
+## Map configuration
 
-Put personal settings in the player's `autoexec.cfg` (or add the same lines to a config that is executed for that player):
-
-```cfg
-default_fov 90
-
-viewmodel_offset_x 0
-viewmodel_offset_y 0
-viewmodel_offset_z 0
-viewmodel_fov 68
-viewmodel_presetpos 1
-```
-
-The offset variables move only the first-person weapon model:
-
-| Variable | Meaning | Clamped range |
-| --- | --- | ---: |
-| `viewmodel_offset_x` | Left / right | -2 to 2.5 |
-| `viewmodel_offset_y` | Forward / backward | -2 to 2 |
-| `viewmodel_offset_z` | Down / up | -2 to 2 |
-| `viewmodel_fov` | Weapon model size control | 54 to 68 |
-
-`viewmodel_presetpos 1`, `2` and `3` apply built-in starting layouts. They are convenience presets, not exact copies of CS2's layouts. The individual offsets can be changed afterwards.
-
-**Important FOV limitation:** `default_fov` is the actual camera FOV already supported by the game. The current client-DLL implementation of `viewmodel_fov` scales the viewmodel as an approximation. A truly independent viewmodel projection FOV requires changing the GoldSrc renderer/engine, not only the game DLL. The new command does not claim to provide that renderer-level feature.
-
-This project registers `cl_rollangle` and `cl_bob`. Use those client settings to remove view roll and weapon bob. The screenshot's `sv_rollangle` is not the corresponding client-side variable in this codebase.
-
-## Per-map config
-
-Create a file named after the map in the mod's `maps` directory:
+The server automatically checks for:
 
 ```text
 maps/<mapname>.cfg
 ```
 
-Map names in the loader are normalized to lowercase. For example, a map named `They_Hunger` loads `maps/they_hunger.cfg`.
+The map name is normalized to lowercase. For example, `They_Hunger` uses `maps/they_hunger.cfg`.
 
-Example profile:
+Two settings are understood both as worldspawn keyvalues and as commands in the map CFG:
+
+| Setting | Purpose |
+| --- | --- |
+| `forcepmodels` | Comma-separated player-model folder names under `models/player` |
+| `globalsoundlist` | Path to the map's sound replacement list |
+
+Example `maps/they_hunger.cfg`:
 
 ```cfg
-// Logical profile name for server logs / future extensions.
-brig_map_profile "they_hunger_classic"
-
-// Exact weapon entity classnames allowed as map pickups.
-// Empty, "*" or "all" means no weapon-pickup restriction.
-brig_map_weapon_allowlist "weapon_crowbar,weapon_9mmhandgun,weapon_shotgun"
-
-// Player model directory name (the folder under models/player).
-// Leave empty to keep the player's selected model.
-brig_map_player_model "hunger_survivor"
-
-// Replacement first-person viewmodels are looked up by basename:
-// <prefix>/v_9mmhandgun.mdl, <prefix>/v_shotgun.mdl, etc.
-brig_map_viewmodel_prefix "models/brig/profiles/they_hunger"
-
-// Replacement weapon/NPC sounds preserve the original relative filename:
-// sound/<prefix>/weapons/357_shot1.wav, etc.
-brig_map_sound_prefix "brig/profiles/they_hunger"
-
-// Sentence aliases are resolved as <prefix><original sentence/group name>.
-brig_map_voice_prefix "TH_"
+forcepmodels "survivor_a,survivor_b,scientist"
+globalsoundlist "maps/they_hunger.gsr"
 ```
 
-The profile loader clears the previous map's values before executing the new map config, so settings do not intentionally carry over between maps.
+The model names above are examples only. Use folder names that actually exist in this mod's `models/player` directory.
+
+The equivalent settings can be set on the map's worldspawn entity using the `forcepmodels` and `globalsoundlist` keyvalues. A CFG can override those values.
+
+When `forcepmodels` is empty, the normal player-model selection is left unchanged. When it contains a list, only those model folders are accepted. If a player has selected a model outside that list, the first valid listed model is used instead. The listed player models are precached automatically.
+
+When `globalsoundlist` is empty, the loader checks for `maps/<mapname>.gsr` automatically. You can point it to another relative `.gsr` path from the map CFG or worldspawn.
+
+## One sound list for sounds and dialogue
+
+There is no separate sound prefix and voice prefix. Both are handled by the same map-local `.gsr` file.
+
+Example `maps/they_hunger.gsr`:
+
+```text
+"aslave/slv_alert1.wav" "they_hunger/slv_alert1.wav"
+"scientist/sci_pain1.wav" "they_hunger/sci_pain1.wav"
+"!SC_HEAL2" "they_hunger/sc_heal2.wav"
+```
+
+The first column is the original sound path or a named sentence beginning with `!`. The second column is the replacement file, relative to the mod's `sound/` directory. Do not add a leading `sound/` to either audio path.
+
+A named sentence replacement is a direct audio-file replacement. This is suitable for replacing an existing voice line with one WAV file. It does not turn a one-file replacement into a newly assembled multi-part sentence.
+
+Entries must be quoted path pairs. Blank lines and lines beginning with `#` or `//` are ignored. Unsafe, absolute or traversal paths are rejected. Audio paths associated with weapons are deliberately not accepted by this map sound-list implementation.
 
 ## Asset layout
 
-For the example above, add only the replacement assets that the map actually needs:
+For the example above, the relevant files would be arranged like this:
 
 ```text
+maps/
+  they_hunger.cfg
+  they_hunger.gsr
+
 models/
   player/
-    hunger_survivor/
-      ...
-  brig/
-    profiles/
-      they_hunger/
-        v_9mmhandgun.mdl
-        v_shotgun.mdl
+    survivor_a/
+      survivor_a.mdl
+    survivor_b/
+      survivor_b.mdl
+    scientist/
+      scientist.mdl
 
 sound/
-  brig/
-    profiles/
-      they_hunger/
-        weapons/
-          357_shot1.wav
-          ...
-  sentences.txt
+  they_hunger/
+    slv_alert1.wav
+    sci_pain1.wav
+    sc_heal2.wav
 ```
 
-- A missing replacement viewmodel falls back to the original `v_*.mdl` model.
-- A missing replacement sound falls back to the original sample.
-- `brig_map_player_model` is a player-model folder name, not a filesystem path.
-- The voice prefix does not load a separate per-map `sentences.txt`. Add prefixed sentence entries (for example, `TH_HEV_ON` or `TH_SC_HELLO`) to the mod's normal `sound/sentences.txt` and place their audio files in the normal sound locations. If a prefixed entry is not present, the original sentence is used.
+This is a layout example, not a claim that those model folders or audio files are already present. The actual model names and replacement audio must match files included with the mod.
 
-## Current weapon restriction scope
+## Map changes and reset behavior
 
-`brig_map_weapon_allowlist` filters map-spawned entities whose classname begins with `weapon_`. It does not yet strip weapons that a player already carries through a level transition or changes to the game's default starting inventory. That needs a separate inventory policy and should be designed per game rules, rather than silently deleting player equipment.
-
-## Classic-like presentation
-
-Use `brig_map_profile` as the profile identifier and combine the settings above to create a classic-like presentation on selected maps: different world weapon pickups, different first-person weapon models, a selected player model, replacement weapon sounds and alternate voice lines. It is intentionally data-driven; it does not enable a separate ruleset, campaign, HUD, or complete Classic game mode by itself.
-
-The exact player-model folder and the content of the They Hunger asset set must be filled in with the assets present in this mod. The example names above are placeholders, not claims that those models or sounds already exist.
+Map-local values are cleared when the server deactivates a map. The next map then reads its own worldspawn settings, CFG and sound list, so the previous map's player-model restrictions or sound substitutions are not intentionally carried over.
