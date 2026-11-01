@@ -1,9 +1,6 @@
 // view/refresh setup functions
 
 #include "hud.h"
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
 #include "cl_util.h"
 #include "cvardef.h"
 #include "usercmd.h"
@@ -91,21 +88,6 @@ cvar_t* cl_bob;
 cvar_t* cl_bobup;
 cvar_t* cl_waterdist;
 cvar_t* cl_chasedist;
-
-cvar_t* viewmodel_offset_x = nullptr;
-cvar_t* viewmodel_offset_y = nullptr;
-cvar_t* viewmodel_offset_z = nullptr;
-cvar_t* viewmodel_fov = nullptr;
-static bool g_bViewInitialized = false;
-
-static float V_ClampFloat(float value, float minimum, float maximum)
-{
-	if (value < minimum)
-		return minimum;
-	if (value > maximum)
-		return maximum;
-	return value;
-}
 
 // These cvars are not registered (so users can't cheat), so set the ->value field directly
 // Register these cvars in V_Init() if needed for easy tweaking
@@ -706,33 +688,6 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 	else if (pparams->viewsize == 80)
 	{
 		view->origin[2] += 0.5;
-	}
-
-	// CS-style viewmodel positioning. These offsets move only the first-person
-	// weapon model; the player's camera origin remains unchanged.
-	if (viewmodel_offset_x && viewmodel_offset_y && viewmodel_offset_z)
-	{
-		const float offsetX = V_ClampFloat(viewmodel_offset_x->value, -2.0f, 2.5f);
-		const float offsetY = V_ClampFloat(viewmodel_offset_y->value, -2.0f, 2.0f);
-		const float offsetZ = V_ClampFloat(viewmodel_offset_z->value, -2.0f, 2.0f);
-		float vmForward[3], vmRight[3], vmUp[3];
-		AngleVectors(view->angles, vmForward, vmRight, vmUp);
-
-		for (int axis = 0; axis < 3; ++axis)
-		{
-			view->origin[axis] += vmRight[axis] * offsetX +
-				vmForward[axis] * offsetY + vmUp[axis] * offsetZ;
-		}
-	}
-
-	// GoldSrc's client DLL does not own the renderer's projection matrix, so this
-	// is a viewmodel-size approximation rather than an independent render FOV.
-	if (viewmodel_fov)
-	{
-		const float requestedFov = V_ClampFloat(viewmodel_fov->value, 54.0f, 68.0f);
-		const float referenceHalfAngle = 68.0f * 0.00872664625f;
-		const float requestedHalfAngle = requestedFov * 0.00872664625f;
-		view->curstate.scale = tanf(referenceHalfAngle) / tanf(requestedHalfAngle);
 	}
 
 	// Add in the punchangle, if any
@@ -1437,23 +1392,6 @@ void V_GetMapChasePosition(int target, float* cl_angles, float* origin, float* a
 	VectorMA(origin, -1536, forward, origin);
 }
 
-static bool BRIG_IsSafeAssetPrefixForClient(const char* prefix)
-{
-	if (!prefix || !*prefix || *prefix == '/' || *prefix == '\\' || strstr(prefix, ".."))
-		return false;
-
-	for (const unsigned char* p = (const unsigned char*)prefix; *p; ++p)
-	{
-		const unsigned char c = *p;
-		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '/'))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
 int V_FindViewModelByWeaponModel(int weaponindex)
 {
 
@@ -1487,18 +1425,6 @@ int V_FindViewModelByWeaponModel(int weaponindex)
 		{
 			if (!strnicmp(weaponModel->name, modelmap[i][0], len))
 			{
-				const char* prefix = gEngfuncs.pfnGetCvarString("brig_viewmodel_prefix");
-				if (prefix && *prefix && BRIG_IsSafeAssetPrefixForClient(prefix))
-				{
-					const char* baseName = strrchr(modelmap[i][1], '/');
-					baseName = baseName ? baseName + 1 : modelmap[i][1];
-					char profilePath[256];
-					snprintf(profilePath, sizeof(profilePath), "%s/%s", prefix, baseName);
-					const int profileIndex = gEngfuncs.pEventAPI->EV_FindModelIndex(profilePath);
-					if (profileIndex > 0)
-						return profileIndex;
-				}
-
 				return gEngfuncs.pEventAPI->EV_FindModelIndex(modelmap[i][1]);
 			}
 			i++;
@@ -1766,40 +1692,9 @@ void V_PunchAxis(int axis, float punch)
 V_Init
 =============
 */
-static void V_SetViewModelPreset()
-{
-	const int preset = atoi(gEngfuncs.Cmd_Argv(1));
-	const char* commands = nullptr;
-
-	switch (preset)
-	{
-	case 1:
-		commands = "viewmodel_offset_x 0\nviewmodel_offset_y 0\nviewmodel_offset_z 0\nviewmodel_fov 68\n";
-		break;
-	case 2:
-		// Larger, more centered weapon presentation.
-		commands = "viewmodel_offset_x 0.5\nviewmodel_offset_y -0.25\nviewmodel_offset_z -0.25\nviewmodel_fov 58\n";
-		break;
-	case 3:
-		// Classic left-leaning presentation.
-		commands = "viewmodel_offset_x -1\nviewmodel_offset_y -1\nviewmodel_offset_z -0.5\nviewmodel_fov 68\n";
-		break;
-	default:
-		gEngfuncs.Con_Printf("Usage: viewmodel_presetpos <1|2|3>\n");
-		return;
-	}
-
-	gEngfuncs.pfnClientCmd(commands);
-}
-
 void V_Init()
 {
-	if (g_bViewInitialized)
-		return;
-
-	g_bViewInitialized = true;
 	gEngfuncs.pfnAddCommand("centerview", V_StartPitchDrift);
-	gEngfuncs.pfnAddCommand("viewmodel_presetpos", V_SetViewModelPreset);
 
 	scr_ofsx = gEngfuncs.pfnRegisterVariable("scr_ofsx", "0", 0);
 	scr_ofsy = gEngfuncs.pfnRegisterVariable("scr_ofsy", "0", 0);
@@ -1813,11 +1708,6 @@ void V_Init()
 	cl_bobup = gEngfuncs.pfnRegisterVariable("cl_bobup", "0.5", 0);
 	cl_waterdist = gEngfuncs.pfnRegisterVariable("cl_waterdist", "4", 0);
 	cl_chasedist = gEngfuncs.pfnRegisterVariable("cl_chasedist", "112", 0);
-
-	viewmodel_offset_x = gEngfuncs.pfnRegisterVariable("viewmodel_offset_x", "0", FCVAR_ARCHIVE);
-	viewmodel_offset_y = gEngfuncs.pfnRegisterVariable("viewmodel_offset_y", "0", FCVAR_ARCHIVE);
-	viewmodel_offset_z = gEngfuncs.pfnRegisterVariable("viewmodel_offset_z", "0", FCVAR_ARCHIVE);
-	viewmodel_fov = gEngfuncs.pfnRegisterVariable("viewmodel_fov", "68", FCVAR_ARCHIVE);
 }
 
 
