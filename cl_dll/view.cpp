@@ -97,6 +97,22 @@ cvar_t* viewmodel_offset_y;
 cvar_t* viewmodel_offset_z;
 static bool g_bViewInitialized = false;
 
+static void V_ViewModelHelp()
+{
+	if (!viewmodel_fov || !viewmodel_offset_x || !viewmodel_offset_y || !viewmodel_offset_z)
+	{
+		gEngfuncs.Con_Printf("Viewmodel settings are not initialized.\\n");
+		return;
+	}
+
+	gEngfuncs.Con_Printf("Viewmodel client settings:\\n");
+	gEngfuncs.Con_Printf("viewmodel_fov %.1f (54-68)\\n", viewmodel_fov->value);
+	gEngfuncs.Con_Printf("viewmodel_offset_x %.2f (-2 to 2.5)\\n", viewmodel_offset_x->value);
+	gEngfuncs.Con_Printf("viewmodel_offset_y %.2f (-2 to 2)\\n", viewmodel_offset_y->value);
+	gEngfuncs.Con_Printf("viewmodel_offset_z %.2f (-2 to 2)\\n", viewmodel_offset_z->value);
+	gEngfuncs.Con_Printf("Presets: viewmodel_presetpos 1, 2 or 3\\n");
+}
+
 static void V_SetViewModelPreset()
 {
 	if (gEngfuncs.Cmd_Argc() != 2)
@@ -1744,6 +1760,7 @@ void V_Init()
 	g_bViewInitialized = true;
 	gEngfuncs.pfnAddCommand("centerview", V_StartPitchDrift);
 	gEngfuncs.pfnAddCommand("viewmodel_presetpos", V_SetViewModelPreset);
+	gEngfuncs.pfnAddCommand("viewmodel", V_ViewModelHelp);
 
 	scr_ofsx = gEngfuncs.pfnRegisterVariable("scr_ofsx", "0", 0);
 	scr_ofsy = gEngfuncs.pfnRegisterVariable("scr_ofsy", "0", 0);
