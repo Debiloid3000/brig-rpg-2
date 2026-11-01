@@ -159,7 +159,7 @@ int DispatchSpawn(edict_t* pent)
 			if (classname && 0 == strnicmp(classname, "weapon_", 7) &&
 				!BRIG_IsMapWeaponAllowed(classname))
 			{
-				ALERT(at_console, "[Brig] Blocked map weapon %s by map profile.\\n", classname);
+				ALERT(at_console, "[Brig] Blocked map weapon %s by map profile.\n", classname);
 				return -1;
 			}
 		}
