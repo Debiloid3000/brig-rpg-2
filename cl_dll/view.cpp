@@ -1,6 +1,8 @@
 // view/refresh setup functions
 
 #include "hud.h"
+#include <stdio.h>
+#include <string.h>
 #include "cl_util.h"
 #include "cvardef.h"
 #include "usercmd.h"
@@ -1423,6 +1425,23 @@ void V_GetMapChasePosition(int target, float* cl_angles, float* origin, float* a
 	VectorNormalize(forward);
 
 	VectorMA(origin, -1536, forward, origin);
+}
+
+static bool BRIG_IsSafeAssetPrefixForClient(const char* prefix)
+{
+	if (!prefix || !*prefix || *prefix == '/' || *prefix == '\\' || strstr(prefix, ".."))
+		return false;
+
+	for (const unsigned char* p = (const unsigned char*)prefix; *p; ++p)
+	{
+		const unsigned char c = *p;
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '/'))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 int V_FindViewModelByWeaponModel(int weaponindex)
