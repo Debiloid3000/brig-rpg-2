@@ -153,7 +153,7 @@ int DispatchSpawn(edict_t* pent)
 
 		// Map weapon allowlists apply only to actual spawned entities. Weapon precache
 		// helpers do not pass through DispatchSpawn, so their metadata remains available.
-		if (!FStringNull(pEntity->pev->classname))
+		if (!BRIG_IsPlayerItemSpawn() && !FStringNull(pEntity->pev->classname))
 		{
 			const char* classname = STRING(pEntity->pev->classname);
 			if (classname && 0 == strnicmp(classname, "weapon_", 7) &&
