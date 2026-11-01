@@ -503,6 +503,7 @@ public:
 	int m_iKeyBits;
 	int m_iHideHUDDisplay;
 	int m_iFOV;
+	int GetDefaultFOV() const;
 	bool m_Teamplay;
 	int m_iRes;
 	cvar_t* m_pCvarStealMouse;
