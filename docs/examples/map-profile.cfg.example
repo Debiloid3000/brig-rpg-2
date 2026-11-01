@@ -1,0 +1,7 @@
+// Example only: copy to maps/<lowercase_map_name>.cfg and edit the assets.
+brig_map_profile "classic_like"
+brig_map_weapon_allowlist "weapon_crowbar,weapon_9mmhandgun,weapon_shotgun"
+brig_map_player_model "example_player"
+brig_map_viewmodel_prefix "models/brig/profiles/example"
+brig_map_sound_prefix "brig/profiles/example"
+brig_map_voice_prefix "EXAMPLE_"
