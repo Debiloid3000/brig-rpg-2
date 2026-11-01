@@ -97,15 +97,6 @@ cvar_t* viewmodel_offset_y;
 cvar_t* viewmodel_offset_z;
 static bool g_bViewInitialized = false;
 
-static float V_ClampViewModelValue(float value, float minimum, float maximum)
-{
-	if (value < minimum)
-		return minimum;
-	if (value > maximum)
-		return maximum;
-	return value;
-}
-
 static void V_SetViewModelPreset()
 {
 	if (gEngfuncs.Cmd_Argc() != 2)
@@ -712,29 +703,6 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 	{
 		VectorCopy(view->angles, view->curstate.angles);
 	}
-
-	// User-configurable first-person weapon placement. These offsets only affect
-	// the viewmodel and never move the player's camera origin.
-	const float offsetX = V_ClampViewModelValue(viewmodel_offset_x->value, -2.0f, 2.5f);
-	const float offsetY = V_ClampViewModelValue(viewmodel_offset_y->value, -2.0f, 2.0f);
-	const float offsetZ = V_ClampViewModelValue(viewmodel_offset_z->value, -2.0f, 2.0f);
-	float viewModelForward[3], viewModelRight[3], viewModelUp[3];
-	AngleVectors(view->angles, viewModelForward, viewModelRight, viewModelUp);
-
-	for (i = 0; i < 3; ++i)
-	{
-		view->origin[i] += viewModelRight[i] * offsetX +
-			viewModelForward[i] * offsetY + viewModelUp[i] * offsetZ;
-	}
-
-	// GoldSrc exposes one projection FOV for the scene. This cvar scales the
-	// viewmodel geometry in the client studio renderer to approximate CS-style
-	// independent weapon FOV without changing the world/camera FOV.
-	const float requestedViewModelFov =
-		V_ClampViewModelValue(viewmodel_fov->value, 54.0f, 68.0f);
-	const float referenceHalfAngle = 68.0f * 0.00872664625f;
-	const float requestedHalfAngle = requestedViewModelFov * 0.00872664625f;
-	view->curstate.scale = tanf(referenceHalfAngle) / tanf(requestedHalfAngle);
 
 	// pushing the view origin down off of the same X/Z plane as the ent's origin will give the
 	// gun a very nice 'shifting' effect when the player looks up/down. If there is a problem
