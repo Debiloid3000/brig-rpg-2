@@ -18,17 +18,14 @@
 extern void GameDLLInit( void );
 void GameDLLShutdown();
 
-void BRIG_LoadMapProfile();
-bool BRIG_IsMapWeaponAllowed(const char* classname);
-void BRIG_BeginPlayerItemSpawn();
-void BRIG_EndPlayerItemSpawn();
-bool BRIG_IsPlayerItemSpawn();
-bool BRIG_IsSafeAssetPrefix(const char* prefix);
-const char* BRIG_GetMapPlayerModel();
-const char* BRIG_GetMapVoicePrefix();
-const char* BRIG_GetMapSoundPrefix();
-const char* BRIG_GetMapViewModelPrefix();
-
+void MapProfiles_Clear();
+void MapProfiles_LoadForCurrentMap();
+void MapProfiles_PrecachePlayerModels();
+void MapProfiles_PrecacheAllSounds();
+bool MapProfiles_IsPlayerModelAllowed(const char* modelName);
+const char* MapProfiles_GetFirstPlayerModel();
+const char* MapProfiles_FindSoundReplacement(const char* sample);
+int MapProfiles_PrecacheSound(const char* sample);
 
 extern cvar_t	displaysoundlist;
 
