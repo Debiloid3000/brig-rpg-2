@@ -78,6 +78,26 @@ static bool MapProfiles_IsValidPlayerModelName(const char* modelName)
 	return true;
 }
 
+static bool MapProfiles_PlayerModelExists(const char* modelName)
+{
+	if (!MapProfiles_IsValidPlayerModelName(modelName))
+		return false;
+
+	char modelPath[96];
+	const int written = snprintf(modelPath, sizeof(modelPath),
+		"models/player/%s/%s.mdl", modelName, modelName);
+	if (written <= 0 || (size_t)written >= sizeof(modelPath))
+		return false;
+
+	int dataLength = 0;
+	byte* data = LOAD_FILE_FOR_ME(modelPath, &dataLength);
+	const bool exists = data != nullptr && dataLength > 0;
+	if (data)
+		FREE_FILE(data);
+
+	return exists;
+}
+
 static bool MapProfiles_NextListToken(const char** cursor, char* output, size_t outputSize)
 {
 	if (!cursor || !*cursor || !output || outputSize < 2)
@@ -126,7 +146,7 @@ bool MapProfiles_IsPlayerModelAllowed(const char* modelName)
 	char token[32];
 	while (MapProfiles_NextListToken(&cursor, token, sizeof(token)))
 	{
-		if (MapProfiles_IsValidPlayerModelName(token) && 0 == stricmp(token, modelName))
+		if (MapProfiles_PlayerModelExists(token) && 0 == stricmp(token, modelName))
 			return true;
 	}
 
@@ -146,7 +166,7 @@ const char* MapProfiles_GetFirstPlayerModel()
 	char token[32];
 	while (MapProfiles_NextListToken(&cursor, token, sizeof(token)))
 	{
-		if (MapProfiles_IsValidPlayerModelName(token))
+		if (MapProfiles_PlayerModelExists(token))
 		{
 			strncpy(firstModel, token, sizeof(firstModel) - 1);
 			firstModel[sizeof(firstModel) - 1] = '\0';
@@ -167,15 +187,15 @@ void MapProfiles_PrecachePlayerModels()
 	char token[32];
 	while (MapProfiles_NextListToken(&cursor, token, sizeof(token)))
 	{
-		if (!MapProfiles_IsValidPlayerModelName(token))
-			continue;
+		if (MapProfiles_PlayerModelExists(token))
+		{
+			char modelPath[96];
+			const int written = snprintf(modelPath, sizeof(modelPath),
+				"models/player/%s/%s.mdl", token, token);
 
-		char modelPath[96];
-		const int written = snprintf(modelPath, sizeof(modelPath),
-			"models/player/%s/%s.mdl", token, token);
-
-		if (written > 0 && (size_t)written < sizeof(modelPath))
-			g_engfuncs.pfnPrecacheModel(modelPath);
+			if (written > 0 && (size_t)written < sizeof(modelPath))
+				g_engfuncs.pfnPrecacheModel(modelPath);
+		}
 	}
 }
 
