@@ -65,8 +65,11 @@ These are personal client settings, not map-profile options. They are registered
 | `viewmodel_offset_x` | 0 | Move weapon left/right | -2 to 2.5 |
 | `viewmodel_offset_y` | 0 | Move weapon forward/back | -2 to 2 |
 | `viewmodel_offset_z` | 0 | Move weapon down/up | -2 to 2 |
+| `viewmodel_sway` | 0 | Procedural viewmodel sway and shake | 0 or 1 |
 
 The offsets are applied to the viewmodel only; they do not move the player's camera. The cvars are archived, so a player's chosen values persist after they change them.
+
+`viewmodel_sway 0` disables the procedural idle sway and viewmodel-only shake. It does not freeze the weapon model's own animation sequences (draw, fire, reload or its authored idle animation).
 
 `viewmodel_fov` is implemented as a viewmodel-only geometry scale in the client Studio renderer. It changes the apparent size of the hands/weapon without changing the world-camera `default_fov`. GoldSrc exposes a shared scene projection through this client interface, so this is an FOV-style visual control rather than a separate renderer projection matrix identical to CS2.
 
