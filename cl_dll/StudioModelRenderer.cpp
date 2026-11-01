@@ -528,7 +528,7 @@ void CStudioModelRenderer::StudioSetUpTransform(bool trivial_accept)
 	if (m_pCurrentEntity == gEngfuncs.GetViewModel())
 	{
 		const float viewModelScale = m_pCurrentEntity->curstate.scale;
-		if (viewModelScale > 0.0f && fabsf(viewModelScale - 1.0f) > 0.0001f)
+		if (viewModelScale > 0.0f && viewModelScale != 1.0f)
 		{
 			for (int row = 0; row < 3; ++row)
 			{
