@@ -357,13 +357,6 @@ void CHalfLifeMultiplay::InitHUD(CBasePlayer* pl)
 
 	UpdateGameMode(pl);
 
-	// Synchronize the map's first-person weapon model folder with each joining client.
-	const char* viewModelPrefix = BRIG_GetMapViewModelPrefix();
-	if (!BRIG_IsSafeAssetPrefix(viewModelPrefix))
-		viewModelPrefix = "";
-
-	CLIENT_COMMAND(pl->edict(), UTIL_VarArgs("brig_viewmodel_prefix \"%s\"\n", viewModelPrefix));
-
 	// sending just one score makes the hud scoreboard active;  otherwise
 	// it is just disabled for single play
 	MESSAGE_BEGIN(MSG_ONE, gmsgScoreInfo, NULL, pl->edict());
