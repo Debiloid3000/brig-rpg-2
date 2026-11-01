@@ -1,6 +1,7 @@
 // view/refresh setup functions
 
 #include "hud.h"
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include "cl_util.h"
@@ -96,6 +97,15 @@ cvar_t* viewmodel_offset_y = nullptr;
 cvar_t* viewmodel_offset_z = nullptr;
 cvar_t* viewmodel_fov = nullptr;
 static bool g_bViewInitialized = false;
+
+static float V_ClampFloat(float value, float minimum, float maximum)
+{
+	if (value < minimum)
+		return minimum;
+	if (value > maximum)
+		return maximum;
+	return value;
+}
 
 // These cvars are not registered (so users can't cheat), so set the ->value field directly
 // Register these cvars in V_Init() if needed for easy tweaking
@@ -702,9 +712,9 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 	// weapon model; the player's camera origin remains unchanged.
 	if (viewmodel_offset_x && viewmodel_offset_y && viewmodel_offset_z)
 	{
-		const float offsetX = max(-2.0f, min(2.5f, viewmodel_offset_x->value));
-		const float offsetY = max(-2.0f, min(2.0f, viewmodel_offset_y->value));
-		const float offsetZ = max(-2.0f, min(2.0f, viewmodel_offset_z->value));
+		const float offsetX = V_ClampFloat(viewmodel_offset_x->value, -2.0f, 2.5f);
+		const float offsetY = V_ClampFloat(viewmodel_offset_y->value, -2.0f, 2.0f);
+		const float offsetZ = V_ClampFloat(viewmodel_offset_z->value, -2.0f, 2.0f);
 		float vmForward[3], vmRight[3], vmUp[3];
 		AngleVectors(view->angles, vmForward, vmRight, vmUp);
 
@@ -719,7 +729,7 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 	// is a viewmodel-size approximation rather than an independent render FOV.
 	if (viewmodel_fov)
 	{
-		const float requestedFov = max(54.0f, min(68.0f, viewmodel_fov->value));
+		const float requestedFov = V_ClampFloat(viewmodel_fov->value, 54.0f, 68.0f);
 		const float referenceHalfAngle = 68.0f * 0.00872664625f;
 		const float requestedHalfAngle = requestedFov * 0.00872664625f;
 		view->curstate.scale = tanf(referenceHalfAngle) / tanf(requestedHalfAngle);
@@ -1756,6 +1766,32 @@ void V_PunchAxis(int axis, float punch)
 V_Init
 =============
 */
+static void V_SetViewModelPreset()
+{
+	const int preset = atoi(gEngfuncs.Cmd_Argv(1));
+	const char* commands = nullptr;
+
+	switch (preset)
+	{
+	case 1:
+		commands = "viewmodel_offset_x 0\\nviewmodel_offset_y 0\\nviewmodel_offset_z 0\\nviewmodel_fov 68\\n";
+		break;
+	case 2:
+		// Larger, more centered weapon presentation.
+		commands = "viewmodel_offset_x 0.5\\nviewmodel_offset_y -0.25\\nviewmodel_offset_z -0.25\\nviewmodel_fov 58\\n";
+		break;
+	case 3:
+		// Classic left-leaning presentation.
+		commands = "viewmodel_offset_x -1\\nviewmodel_offset_y -1\\nviewmodel_offset_z -0.5\\nviewmodel_fov 68\\n";
+		break;
+	default:
+		gEngfuncs.Con_Printf("Usage: viewmodel_presetpos <1|2|3>\\n");
+		return;
+	}
+
+	gEngfuncs.pfnClientCmd(commands);
+}
+
 void V_Init()
 {
 	if (g_bViewInitialized)
@@ -1763,6 +1799,7 @@ void V_Init()
 
 	g_bViewInitialized = true;
 	gEngfuncs.pfnAddCommand("centerview", V_StartPitchDrift);
+	gEngfuncs.pfnAddCommand("viewmodel_presetpos", V_SetViewModelPreset);
 
 	scr_ofsx = gEngfuncs.pfnRegisterVariable("scr_ofsx", "0", 0);
 	scr_ofsy = gEngfuncs.pfnRegisterVariable("scr_ofsy", "0", 0);
