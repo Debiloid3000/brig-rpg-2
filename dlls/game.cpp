@@ -330,7 +330,9 @@ static bool MapProfiles_IsSafeSoundListPath(const char* path)
 	}
 
 	const size_t length = strlen(path);
-	if (length < 5 || 0 != stricmp(path + length - 4, ".gsr"))
+	const bool isTextList = length >= 4 && 0 == stricmp(path + length - 4, ".txt");
+	const bool isLegacyGsr = length >= 4 && 0 == stricmp(path + length - 4, ".gsr");
+	if (!isTextList && !isLegacyGsr)
 		return false;
 
 	for (const unsigned char* p = (const unsigned char*)path; *p; ++p)
@@ -472,7 +474,7 @@ void MapProfiles_LoadForCurrentMap()
 	if (!*CVAR_GET_STRING("globalsoundlist"))
 	{
 		char defaultSoundList[96];
-		snprintf(defaultSoundList, sizeof(defaultSoundList), "maps/%s.gsr", mapName);
+		snprintf(defaultSoundList, sizeof(defaultSoundList), "sound/%s/soundrep.txt", mapName);
 		CVAR_SET_STRING("globalsoundlist", defaultSoundList);
 	}
 
@@ -495,15 +497,27 @@ void MapProfiles_LoadForCurrentMap()
 		char normalizedPath[128];
 		const char* pathToLoad = soundList;
 
-		// Accept the conventional relative map path used by map-authored configs.
+		// Support the relative sound-folder form used by Sven Co-op map configs,
+		// as well as explicit sound/ and maps/ paths.
 		if (0 == strnicmp(soundList, "../../maps/", 11))
 		{
 			snprintf(normalizedPath, sizeof(normalizedPath), "maps/%s", soundList + 11);
 			pathToLoad = normalizedPath;
 		}
+		else if (0 != strnicmp(soundList, "sound/", 6) &&
+			0 != strnicmp(soundList, "maps/", 5))
+		{
+			const int written = snprintf(normalizedPath, sizeof(normalizedPath),
+				"sound/%s", soundList);
+			if (written > 0 && (size_t)written < sizeof(normalizedPath))
+				pathToLoad = normalizedPath;
+		}
 
 		MapProfiles_LoadSoundList(pathToLoad);
 	}
+
+	// Register replacement files before any map entity can try to play them.
+	MapProfiles_PrecacheAllSounds();
 
 	ALERT(at_console, "Loaded map settings for %s.\n", mapName);
 }
