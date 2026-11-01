@@ -120,7 +120,7 @@ static void BRIG_LoadViewModel(const char* szViewModel, CBasePlayer* m_pPlayer)
 	if (!szViewModel || !m_pPlayer)
 		return;
 
-	const char* prefix = CVAR_GET_STRING("brig_viewmodel_prefix");
+	const char* prefix = gEngfuncs.pfnGetCvarString("brig_viewmodel_prefix");
 	if (BRIG_IsSafeClientViewModelPrefix(prefix))
 	{
 		const char* baseName = strrchr(szViewModel, '/');
