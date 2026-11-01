@@ -18,6 +18,14 @@
 extern void GameDLLInit( void );
 void GameDLLShutdown();
 
+void BRIG_LoadMapProfile();
+bool BRIG_IsMapWeaponAllowed(const char* classname);
+bool BRIG_IsSafeAssetPrefix(const char* prefix);
+const char* BRIG_GetMapPlayerModel();
+const char* BRIG_GetMapVoicePrefix();
+const char* BRIG_GetMapSoundPrefix();
+const char* BRIG_GetMapViewModelPrefix();
+
 
 extern cvar_t	displaysoundlist;
 
