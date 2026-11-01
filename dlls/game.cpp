@@ -130,6 +130,24 @@ bool BRIG_IsSafeAssetPrefix(const char* prefix)
 	return true;
 }
 
+static unsigned int g_brigPlayerItemSpawnDepth = 0;
+
+void BRIG_BeginPlayerItemSpawn()
+{
+	++g_brigPlayerItemSpawnDepth;
+}
+
+void BRIG_EndPlayerItemSpawn()
+{
+	if (g_brigPlayerItemSpawnDepth > 0)
+		--g_brigPlayerItemSpawnDepth;
+}
+
+bool BRIG_IsPlayerItemSpawn()
+{
+	return g_brigPlayerItemSpawnDepth > 0;
+}
+
 bool BRIG_IsMapWeaponAllowed(const char* classname)
 {
 	if (!classname || !*classname)
