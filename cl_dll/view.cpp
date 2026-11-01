@@ -1791,7 +1791,7 @@ void V_Init()
 	viewmodel_offset_y = gEngfuncs.pfnRegisterVariable("viewmodel_offset_y", "0", FCVAR_ARCHIVE);
 	viewmodel_offset_z = gEngfuncs.pfnRegisterVariable("viewmodel_offset_z", "0", FCVAR_ARCHIVE);
 	viewmodel_sway = gEngfuncs.pfnRegisterVariable("viewmodel_sway", "0", FCVAR_ARCHIVE);
-
+}
 
 //#define TRACE_TEST
 #if defined(TRACE_TEST)
