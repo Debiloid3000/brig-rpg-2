@@ -26,6 +26,7 @@ extern cvar_t* viewmodel_fov;
 extern cvar_t* viewmodel_offset_x;
 extern cvar_t* viewmodel_offset_y;
 extern cvar_t* viewmodel_offset_z;
+extern cvar_t* viewmodel_sway;
 
 static float StudioClampViewModelValue(float value, float minimum, float maximum)
 {
