@@ -33,86 +33,6 @@
 static char* memfgets(byte* pMemFile, int fileSize, int& filePos, char* pBuffer, int bufferSize);
 
 
-// Cache per-map sound substitutions so repeated weapon fire does not hit the
-// filesystem on every playback. Custom files live below sound/<prefix>/.
-struct BRIGProfileSoundCacheEntry
-{
-	char path[256];
-	bool exists;
-};
-
-static BRIGProfileSoundCacheEntry g_brigProfileSoundCache[512]{};
-static size_t g_brigProfileSoundCacheCount = 0;
-
-static bool BRIG_IsSafeVoicePrefix(const char* prefix)
-{
-	if (!prefix || !*prefix || strlen(prefix) >= 24)
-		return false;
-
-	for (const unsigned char* p = (const unsigned char*)prefix; *p; ++p)
-	{
-		const unsigned char c = *p;
-		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '_' || c == '-'))
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
-static bool BRIG_ProfileSoundPath(const char* sample, char* output, size_t outputSize)
-{
-	if (!sample || !*sample || *sample == '!' || *sample == '/' || *sample == '\\' || strstr(sample, ".."))
-		return false;
-
-	const char* prefix = BRIG_GetMapSoundPrefix();
-	if (!prefix || !*prefix || !BRIG_IsSafeAssetPrefix(prefix))
-		return false;
-
-	const int written = snprintf(output, outputSize, "%s/%s", prefix, sample);
-	if (written <= 0 || (size_t)written >= outputSize)
-		return false;
-
-	for (size_t i = 0; i < g_brigProfileSoundCacheCount; ++i)
-	{
-		if (0 == strcmp(g_brigProfileSoundCache[i].path, output))
-			return g_brigProfileSoundCache[i].exists;
-	}
-
-	char filesystemPath[320];
-	snprintf(filesystemPath, sizeof(filesystemPath), "sound/%s", output);
-	int fileLength = 0;
-	byte* fileData = LOAD_FILE_FOR_ME(filesystemPath, &fileLength);
-	const bool exists = fileData != nullptr && fileLength > 0;
-	if (fileData)
-		FREE_FILE(fileData);
-
-	if (g_brigProfileSoundCacheCount < ARRAYSIZE(g_brigProfileSoundCache))
-	{
-		BRIGProfileSoundCacheEntry& entry = g_brigProfileSoundCache[g_brigProfileSoundCacheCount++];
-		strncpy(entry.path, output, sizeof(entry.path) - 1);
-		entry.path[sizeof(entry.path) - 1] = '\0';
-		entry.exists = exists;
-	}
-
-	return exists;
-}
-
-int BRIG_PrecacheSound(const char* sample)
-{
-	if (!sample)
-		return 0;
-
-	char profilePath[256];
-	if (BRIG_ProfileSoundPath(sample, profilePath, sizeof(profilePath)))
-		return g_engfuncs.pfnPrecacheSound(profilePath);
-
-	return g_engfuncs.pfnPrecacheSound((char*)sample);
-}
-
-
 // ==================== GENERIC AMBIENT SOUND ======================================
 
 // runtime pitch shift and volume fadein/out structure
@@ -1237,20 +1157,6 @@ int SENTENCEG_GetIndex(const char* szgroupname)
 	if (!fSentencesInit || !szgroupname)
 		return -1;
 
-	// Prefer a profile-specific sentence group, but always fall back to the
-	// original group so a profile can override only the lines it supplies.
-	const char* prefix = BRIG_GetMapVoicePrefix();
-	if (BRIG_IsSafeVoicePrefix(prefix))
-	{
-		char profileGroup[64];
-		snprintf(profileGroup, sizeof(profileGroup), "%s%s", prefix, szgroupname);
-		for (i = 0; 0 != rgsentenceg[i].count; ++i)
-		{
-			if (0 == strcmp(profileGroup, rgsentenceg[i].szgroupname))
-				return i;
-		}
-	}
-
 	// search rgsentenceg for match on szgroupname
 
 	i = 0;
@@ -1493,29 +1399,6 @@ int SENTENCEG_Lookup(const char* sample, char* sentencenum)
 	if (!sample || *sample != '!')
 		return -1;
 
-	// Resolve a profile-prefixed sentence first (for example, !CLASSIC_HEV_ON),
-	// then fall back to the original sentence when the profile has no override.
-	const char* prefix = BRIG_GetMapVoicePrefix();
-	if (BRIG_IsSafeVoicePrefix(prefix))
-	{
-		char profileSentence[64];
-		snprintf(profileSentence, sizeof(profileSentence), "%s%s", prefix, sample + 1);
-		for (i = 0; i < gcallsentences; ++i)
-		{
-			if (!stricmp(gszallsentencenames[i], profileSentence))
-			{
-				if (sentencenum)
-				{
-					strcpy(sentencenum, "!");
-					sprintf(sznum, "%d", i);
-					strcat(sentencenum, sznum);
-				}
-				return i;
-			}
-		}
-	}
-
-	// Original sentence fallback.
 	for (i = 0; i < gcallsentences; i++)
 		if (!stricmp(gszallsentencenames[i], sample + 1))
 		{
@@ -1534,7 +1417,19 @@ int SENTENCEG_Lookup(const char* sample, char* sentencenum)
 void EMIT_SOUND_DYN(edict_t* entity, int channel, const char* sample, float volume, float attenuation,
 	int flags, int pitch)
 {
-	if (sample && *sample == '!')
+	if (!sample || !*sample)
+		return;
+
+	// A single map sound list handles both ordinary audio paths and named
+	// sentence tokens (for example, "!SC_HEAL2").
+	const char* replacement = MapProfiles_FindSoundReplacement(sample);
+	if (replacement)
+	{
+		EMIT_SOUND_DYN2(entity, channel, replacement, volume, attenuation, flags, pitch);
+		return;
+	}
+
+	if (*sample == '!')
 	{
 		char name[32];
 		if (SENTENCEG_Lookup(sample, name) >= 0)
@@ -1544,11 +1439,7 @@ void EMIT_SOUND_DYN(edict_t* entity, int channel, const char* sample, float volu
 	}
 	else
 	{
-		char profilePath[256];
-		if (BRIG_ProfileSoundPath(sample, profilePath, sizeof(profilePath)))
-			EMIT_SOUND_DYN2(entity, channel, profilePath, volume, attenuation, flags, pitch);
-		else
-			EMIT_SOUND_DYN2(entity, channel, sample, volume, attenuation, flags, pitch);
+		EMIT_SOUND_DYN2(entity, channel, sample, volume, attenuation, flags, pitch);
 	}
 }
 
@@ -1558,18 +1449,17 @@ void EMIT_SOUND_PREDICTED(edict_t* entity, int channel, const char* sample, floa
 	//If entity is not a player this will return false.
 	if (0 != g_engfuncs.pfnCanSkipPlayer(entity))
 	{
-		char profilePath[256];
 		char sentenceName[32];
 		const char* resolvedSample = sample;
+		const char* replacement = MapProfiles_FindSoundReplacement(sample);
 
-		if (sample && *sample == '!')
+		if (replacement)
 		{
-			if (SENTENCEG_Lookup(sample, sentenceName) >= 0)
-				resolvedSample = sentenceName;
+			resolvedSample = replacement;
 		}
-		else if (BRIG_ProfileSoundPath(sample, profilePath, sizeof(profilePath)))
+		else if (sample && *sample == '!' && SENTENCEG_Lookup(sample, sentenceName) >= 0)
 		{
-			resolvedSample = profilePath;
+			resolvedSample = sentenceName;
 		}
 
 		pmove->PM_PlaySound(channel, resolvedSample, volume, attenuation, flags, pitch);
