@@ -100,7 +100,7 @@ static bool g_bViewInitialized = false;
 
 static void V_ViewModelHelp()
 {
-	if (!viewmodel_fov || !viewmodel_offset_x || !viewmodel_offset_y || !viewmodel_offset_z)
+	if (!viewmodel_fov || !viewmodel_offset_x || !viewmodel_offset_y || !viewmodel_offset_z || !viewmodel_sway)
 	{
 		gEngfuncs.Con_Printf("Viewmodel settings are not initialized.\n");
 		return;
@@ -111,9 +111,9 @@ static void V_ViewModelHelp()
 	gEngfuncs.Con_Printf("viewmodel_offset_x %.2f (-2 to 2.5)\n", viewmodel_offset_x->value);
 	gEngfuncs.Con_Printf("viewmodel_offset_y %.2f (-2 to 2)\n", viewmodel_offset_y->value);
 	gEngfuncs.Con_Printf("viewmodel_offset_z %.2f (-2 to 2)\n", viewmodel_offset_z->value);
-\tgEngfuncs.Con_Printf("viewmodel_sway %.0f (0=off, 1=on)\\n", viewmodel_sway ? viewmodel_sway->value : 0.0f);\n	cl_entity_t* viewModel = gEngfuncs.GetViewModel();
-	gEngfuncs.Con_Printf("Model: %s\n",
-		(viewModel && viewModel->model) ? viewModel->model->name : "<not loaded>");
+	gEngfuncs.Con_Printf("viewmodel_sway %.0f (0=off, 1=on)\n", viewmodel_sway->value);
+	cl_entity_t* viewModel = gEngfuncs.GetViewModel();
+	gEngfuncs.Con_Printf("Model: %s\n", (viewModel && viewModel->model) ? viewModel->model->name : "<not loaded>");
 	gEngfuncs.Con_Printf("Presets: viewmodel_presetpos 1, 2 or 3\n");
 }
 
@@ -1790,7 +1790,7 @@ void V_Init()
 	viewmodel_offset_x = gEngfuncs.pfnRegisterVariable("viewmodel_offset_x", "0", FCVAR_ARCHIVE);
 	viewmodel_offset_y = gEngfuncs.pfnRegisterVariable("viewmodel_offset_y", "0", FCVAR_ARCHIVE);
 	viewmodel_offset_z = gEngfuncs.pfnRegisterVariable("viewmodel_offset_z", "0", FCVAR_ARCHIVE);
-\tviewmodel_sway = gEngfuncs.pfnRegisterVariable("viewmodel_sway", "0", FCVAR_ARCHIVE);\n}
+	viewmodel_sway = gEngfuncs.pfnRegisterVariable("viewmodel_sway", "0", FCVAR_ARCHIVE);
 
 
 //#define TRACE_TEST
