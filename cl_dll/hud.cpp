@@ -20,6 +20,8 @@
 
 #include "hud.h"
 #include "cl_util.h"
+
+void V_Init();
 #include <string.h>
 #include <stdio.h>
 #include "parsemsg.h"
@@ -283,6 +285,7 @@ int __MsgFunc_AllowSpec(const char* pszName, int iSize, void* pbuf)
 // This is called every time the DLL is loaded
 void CHud::Init()
 {
+	V_Init();
 	HOOK_MESSAGE(Logo);
 	HOOK_MESSAGE(ResetHUD);
 	HOOK_MESSAGE(GameMode);
