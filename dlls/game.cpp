@@ -956,13 +956,8 @@ void GameDLLInit()
 	CVAR_REGISTER(&mp_chattime);
 
 	CVAR_REGISTER(&sv_allowbunnyhopping);
-
-	CVAR_REGISTER(&brig_map_profile);
-	CVAR_REGISTER(&brig_map_weapon_allowlist);
-	CVAR_REGISTER(&brig_map_player_model);
-	CVAR_REGISTER(&brig_map_voice_prefix);
-	CVAR_REGISTER(&brig_map_sound_prefix);
-	CVAR_REGISTER(&brig_map_viewmodel_prefix);
+	CVAR_REGISTER(&forcepmodels);
+	CVAR_REGISTER(&globalsoundlist);
 
 	// REGISTER CVARS FOR SKILL LEVEL STUFF
 	// Agrunt
