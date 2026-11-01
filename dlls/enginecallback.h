@@ -21,6 +21,8 @@
 // Holds engine functionality callbacks
 inline enginefuncs_t g_engfuncs;
 
+#define GETPLAYERUSERID (*g_engfuncs.pfnGetPlayerUserId)
+
 // The server DLL applies map-specific non-weapon sound replacements.
 #define PRECACHE_MODEL (*g_engfuncs.pfnPrecacheModel)
 #ifdef CLIENT_DLL
