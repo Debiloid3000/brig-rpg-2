@@ -106,25 +106,31 @@ static void V_SetViewModelPreset()
 	}
 
 	const int preset = atoi(gEngfuncs.Cmd_Argv(1));
-	const char* commands = nullptr;
 
 	switch (preset)
 	{
 	case 1:
-		commands = "viewmodel_offset_x 0\nviewmodel_offset_y 0\nviewmodel_offset_z 0\nviewmodel_fov 68\n";
+		gEngfuncs.Cvar_SetValue("viewmodel_offset_x", 0.0f);
+		gEngfuncs.Cvar_SetValue("viewmodel_offset_y", 0.0f);
+		gEngfuncs.Cvar_SetValue("viewmodel_offset_z", 0.0f);
+		gEngfuncs.Cvar_SetValue("viewmodel_fov", 68.0f);
 		break;
 	case 2:
-		commands = "viewmodel_offset_x 0.5\nviewmodel_offset_y -0.25\nviewmodel_offset_z -0.25\nviewmodel_fov 58\n";
+		gEngfuncs.Cvar_SetValue("viewmodel_offset_x", 0.5f);
+		gEngfuncs.Cvar_SetValue("viewmodel_offset_y", -0.25f);
+		gEngfuncs.Cvar_SetValue("viewmodel_offset_z", -0.25f);
+		gEngfuncs.Cvar_SetValue("viewmodel_fov", 58.0f);
 		break;
 	case 3:
-		commands = "viewmodel_offset_x -1\nviewmodel_offset_y -1\nviewmodel_offset_z -0.5\nviewmodel_fov 68\n";
+		gEngfuncs.Cvar_SetValue("viewmodel_offset_x", -1.0f);
+		gEngfuncs.Cvar_SetValue("viewmodel_offset_y", -1.0f);
+		gEngfuncs.Cvar_SetValue("viewmodel_offset_z", -0.5f);
+		gEngfuncs.Cvar_SetValue("viewmodel_fov", 68.0f);
 		break;
 	default:
 		gEngfuncs.Con_Printf("Usage: viewmodel_presetpos <1|2|3>\n");
 		return;
 	}
-
-	gEngfuncs.pfnClientCmd(commands);
 }
 
 // These cvars are not registered (so users can't cheat), so set the ->value field directly
