@@ -210,13 +210,32 @@ float V_CalcBob(struct ref_params_s* pparams)
 {
 	static double bobtime = 0;
 	static float bob = 0;
-	float cycle;
 	static float lasttime = 0;
+	float cycle;
 	Vector vel;
 
+	// A zero bob scale is a hard opt-out. Check it before the frame-time cache
+	// so a previous frame's bob cannot remain visible after the cvar is changed.
+	if (!cl_bob || cl_bob->value <= 0.0f)
+	{
+		bob = 0.0f;
+		bobtime = 0.0;
+		lasttime = pparams->time;
+		return 0.0f;
+	}
 
-	if (pparams->onground == -1 ||
-		pparams->time == lasttime)
+	// The classic bob formula divides by both values below. Treat zero (and
+	// invalid boundary values) as disabled instead of producing NaN/INF.
+	if (!cl_bobcycle || cl_bobcycle->value <= 0.0f ||
+		!cl_bobup || cl_bobup->value <= 0.0f || cl_bobup->value >= 1.0f)
+	{
+		bob = 0.0f;
+		bobtime = 0.0;
+		lasttime = pparams->time;
+		return 0.0f;
+	}
+
+	if (pparams->onground == -1 || pparams->time == lasttime)
 	{
 		// just use old value
 		return bob;
@@ -224,19 +243,19 @@ float V_CalcBob(struct ref_params_s* pparams)
 
 	lasttime = pparams->time;
 
-	//TODO: bobtime will eventually become a value so large that it will no longer behave properly.
-	//Consider resetting the variable if a level change is detected (pparams->time < lasttime might do the trick).
-	bobtime += pparams->frametime;
-	cycle = bobtime - (int)(bobtime / cl_bobcycle->value) * cl_bobcycle->value;
-	cycle /= cl_bobcycle->value;
+	// QuakeWorld bob timing avoids multiplayer clock jitter.
+	if (pparams->frametime > 0.0f)
+		bobtime += pparams->frametime;
+
+	cycle = (float)fmod(bobtime, cl_bobcycle->value) / cl_bobcycle->value;
 
 	if (cycle < cl_bobup->value)
 	{
-		cycle = M_PI * cycle / cl_bobup->value;
+		cycle = (float)M_PI * cycle / cl_bobup->value;
 	}
 	else
 	{
-		cycle = M_PI + M_PI * (cycle - cl_bobup->value) / (1.0 - cl_bobup->value);
+		cycle = (float)M_PI + (float)M_PI * (cycle - cl_bobup->value) / (1.0f - cl_bobup->value);
 	}
 
 	// bob is proportional to simulated velocity in the xy plane
@@ -245,7 +264,7 @@ float V_CalcBob(struct ref_params_s* pparams)
 	vel[2] = 0;
 
 	bob = sqrt(vel[0] * vel[0] + vel[1] * vel[1]) * cl_bob->value;
-	bob = bob * 0.3 + bob * 0.7 * sin(cycle);
+	bob = bob * 0.3f + bob * 0.7f * sin(cycle);
 	bob = V_min(bob, 4);
 	bob = V_max(bob, -7);
 	return bob;
@@ -715,9 +734,9 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 
 	// User-configurable first-person weapon placement. These offsets only affect
 	// the viewmodel and never move the player's camera origin.
-	const float offsetX = V_ClampViewModelValue(viewmodel_offset_x->value, -2.0f, 2.5f);
-	const float offsetY = V_ClampViewModelValue(viewmodel_offset_y->value, -2.0f, 2.0f);
-	const float offsetZ = V_ClampViewModelValue(viewmodel_offset_z->value, -2.0f, 2.0f);
+	const float offsetX = V_ClampViewModelValue(viewmodel_offset_x->value, -20.0f, 20.0f);
+	const float offsetY = V_ClampViewModelValue(viewmodel_offset_y->value, -20.0f, 20.0f);
+	const float offsetZ = V_ClampViewModelValue(viewmodel_offset_z->value, -20.0f, 20.0f);
 	float viewModelForward[3], viewModelRight[3], viewModelUp[3];
 	AngleVectors(view->angles, viewModelForward, viewModelRight, viewModelUp);
 
@@ -731,7 +750,7 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 	// viewmodel geometry in the client studio renderer to approximate CS-style
 	// independent weapon FOV without changing the world/camera FOV.
 	const float requestedViewModelFov =
-		V_ClampViewModelValue(viewmodel_fov->value, 54.0f, 68.0f);
+		V_ClampViewModelValue(viewmodel_fov->value, 54.0f, 120.0f);
 	const float referenceHalfAngle = 68.0f * 0.00872664625f;
 	const float requestedHalfAngle = requestedViewModelFov * 0.00872664625f;
 	view->curstate.scale = tanf(referenceHalfAngle) / tanf(requestedHalfAngle);
@@ -1778,9 +1797,9 @@ void V_Init()
 	v_centermove = gEngfuncs.pfnRegisterVariable("v_centermove", "0.15", 0);
 	v_centerspeed = gEngfuncs.pfnRegisterVariable("v_centerspeed", "500", 0);
 
-	cl_bobcycle = gEngfuncs.pfnRegisterVariable("cl_bobcycle", "0.8", 0); // best default for my experimental gun wag (sjb)
-	cl_bob = gEngfuncs.pfnRegisterVariable("cl_bob", "0", 0);		  // best default for my experimental gun wag (sjb)
-	cl_bobup = gEngfuncs.pfnRegisterVariable("cl_bobup", "0.5", 0);
+	cl_bobcycle = gEngfuncs.pfnRegisterVariable("cl_bobcycle", "0", 0);
+	cl_bob = gEngfuncs.pfnRegisterVariable("cl_bob", "0", 0);
+	cl_bobup = gEngfuncs.pfnRegisterVariable("cl_bobup", "0", 0);
 	cl_waterdist = gEngfuncs.pfnRegisterVariable("cl_waterdist", "4", 0);
 	cl_chasedist = gEngfuncs.pfnRegisterVariable("cl_chasedist", "112", 0);
 
