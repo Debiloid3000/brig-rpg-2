@@ -82,12 +82,12 @@ A preset sets the four viewmodel cvars; the individual values can then be adjust
 
 ## Bob and camera roll defaults
 
-This project does **not** force either option to zero at startup. Its existing defaults are:
+Both settings default to zero for a fresh client configuration:
 
-- `cl_bob 0.01` — small weapon bob.
-- `cl_rollangle 2.0` — camera roll amount.
+- `cl_bob 0` — disables weapon bob.
+- `cl_rollangle 0` — disables camera roll.
 
-To disable them manually for the current client, enter `cl_bob 0` and/or `cl_rollangle 0` in that client's console. Those commands are optional personal preferences; they are not added to a generated `autoexec.cfg` and are not forced by map profiles.
+These are client defaults, not map-profile settings. Players can still change either value in their own config or console.
 
 ## Asset layout
 
