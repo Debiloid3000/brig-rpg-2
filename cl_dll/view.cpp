@@ -1458,6 +1458,18 @@ int V_FindViewModelByWeaponModel(int weaponindex)
 		{
 			if (!strnicmp(weaponModel->name, modelmap[i][0], len))
 			{
+				const char* prefix = CVAR_GET_STRING("brig_viewmodel_prefix");
+				if (prefix && *prefix && BRIG_IsSafeAssetPrefixForClient(prefix))
+				{
+					const char* baseName = strrchr(modelmap[i][1], '/');
+					baseName = baseName ? baseName + 1 : modelmap[i][1];
+					char profilePath[256];
+					snprintf(profilePath, sizeof(profilePath), "%s/%s", prefix, baseName);
+					const int profileIndex = gEngfuncs.pEventAPI->EV_FindModelIndex(profilePath);
+					if (profileIndex > 0)
+						return profileIndex;
+				}
+
 				return gEngfuncs.pEventAPI->EV_FindModelIndex(modelmap[i][1]);
 			}
 			i++;
