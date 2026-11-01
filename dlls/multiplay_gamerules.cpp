@@ -362,7 +362,7 @@ void CHalfLifeMultiplay::InitHUD(CBasePlayer* pl)
 	if (!BRIG_IsSafeAssetPrefix(viewModelPrefix))
 		viewModelPrefix = "";
 
-	CLIENT_COMMAND(pl->edict(), UTIL_VarArgs("brig_viewmodel_prefix \\"%s\\"\\n", viewModelPrefix));
+	CLIENT_COMMAND(pl->edict(), UTIL_VarArgs("brig_viewmodel_prefix \"%s\"\n", viewModelPrefix));
 
 	// sending just one score makes the hud scoreboard active;  otherwise
 	// it is just disabled for single play
