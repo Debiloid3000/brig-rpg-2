@@ -23,9 +23,12 @@
 #include "player.h"
 #include "talkmonster.h"
 #include "gamerules.h"
+#include "game.h"
 #include "pm_defs.h"
 #include "pm_materials.h"
 #include "pm_shared.h"
+#include <stdio.h>
+#include <string.h>
 
 static char* memfgets(byte* pMemFile, int fileSize, int& filePos, char* pBuffer, int bufferSize);
 
@@ -1393,8 +1396,9 @@ int SENTENCEG_Lookup(const char* sample, char* sentencenum)
 	char sznum[32];
 
 	int i;
-	// this is a sentence name; lookup sentence number
-	// and give to engine as string.
+	if (!sample || *sample != '!')
+		return -1;
+
 	for (i = 0; i < gcallsentences; i++)
 		if (!stricmp(gszallsentencenames[i], sample + 1))
 		{
@@ -1413,7 +1417,19 @@ int SENTENCEG_Lookup(const char* sample, char* sentencenum)
 void EMIT_SOUND_DYN(edict_t* entity, int channel, const char* sample, float volume, float attenuation,
 	int flags, int pitch)
 {
-	if (sample && *sample == '!')
+	if (!sample || !*sample)
+		return;
+
+	// A single map sound list handles both ordinary audio paths and named
+	// sentence tokens (for example, "!SC_HEAL2").
+	const char* replacement = MapProfiles_FindSoundReplacement(sample);
+	if (replacement)
+	{
+		EMIT_SOUND_DYN2(entity, channel, replacement, volume, attenuation, flags, pitch);
+		return;
+	}
+
+	if (*sample == '!')
 	{
 		char name[32];
 		if (SENTENCEG_Lookup(sample, name) >= 0)
@@ -1422,7 +1438,9 @@ void EMIT_SOUND_DYN(edict_t* entity, int channel, const char* sample, float volu
 			ALERT(at_aiconsole, "Unable to find %s in sentences.txt\n", sample);
 	}
 	else
+	{
 		EMIT_SOUND_DYN2(entity, channel, sample, volume, attenuation, flags, pitch);
+	}
 }
 
 void EMIT_SOUND_PREDICTED(edict_t* entity, int channel, const char* sample, float volume, float attenuation,
@@ -1431,7 +1449,20 @@ void EMIT_SOUND_PREDICTED(edict_t* entity, int channel, const char* sample, floa
 	//If entity is not a player this will return false.
 	if (0 != g_engfuncs.pfnCanSkipPlayer(entity))
 	{
-		pmove->PM_PlaySound(channel, sample, volume, attenuation, flags, pitch);
+		char sentenceName[32];
+		const char* resolvedSample = sample;
+		const char* replacement = MapProfiles_FindSoundReplacement(sample);
+
+		if (replacement)
+		{
+			resolvedSample = replacement;
+		}
+		else if (sample && *sample == '!' && SENTENCEG_Lookup(sample, sentenceName) >= 0)
+		{
+			resolvedSample = sentenceName;
+		}
+
+		pmove->PM_PlaySound(channel, resolvedSample, volume, attenuation, flags, pitch);
 	}
 	else
 	{

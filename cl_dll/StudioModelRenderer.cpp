@@ -522,6 +522,22 @@ void CStudioModelRenderer::StudioSetUpTransform(bool trivial_accept)
 	angles[PITCH] = -angles[PITCH];
 	AngleMatrix(angles, (*m_protationmatrix));
 
+	// The engine's viewmodel is rendered by this client-side studio renderer.
+	// Apply its FOV-like scale only to that entity, leaving world/player models
+	// and their transforms untouched.
+	if (m_pCurrentEntity == gEngfuncs.GetViewModel())
+	{
+		const float viewModelScale = m_pCurrentEntity->curstate.scale;
+		if (viewModelScale > 0.0f && viewModelScale != 1.0f)
+		{
+			for (int row = 0; row < 3; ++row)
+			{
+				for (int column = 0; column < 3; ++column)
+					(*m_protationmatrix)[row][column] *= viewModelScale;
+			}
+		}
+	}
+
 	if (0 == IEngineStudio.IsHardware())
 	{
 		static float viewmatrix[3][4];

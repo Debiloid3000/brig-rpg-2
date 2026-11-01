@@ -18,6 +18,14 @@
 extern void GameDLLInit( void );
 void GameDLLShutdown();
 
+void MapProfiles_Clear();
+void MapProfiles_LoadForCurrentMap();
+void MapProfiles_PrecachePlayerModels();
+void MapProfiles_PrecacheAllSounds();
+bool MapProfiles_IsPlayerModelAllowed(const char* modelName);
+const char* MapProfiles_GetFirstPlayerModel();
+const char* MapProfiles_FindSoundReplacement(const char* sample);
+int MapProfiles_PrecacheSound(const char* sample);
 
 extern cvar_t	displaysoundlist;
 

@@ -18,6 +18,8 @@
 #include "screenfade.h"
 #include "shake.h"
 #include "hltv.h"
+#include <math.h>
+#include <stdlib.h>
 #include "Exports.h"
 
 int CL_IsThirdPerson();
@@ -88,6 +90,51 @@ cvar_t* cl_bob;
 cvar_t* cl_bobup;
 cvar_t* cl_waterdist;
 cvar_t* cl_chasedist;
+
+cvar_t* viewmodel_fov;
+cvar_t* viewmodel_offset_x;
+cvar_t* viewmodel_offset_y;
+cvar_t* viewmodel_offset_z;
+static bool g_bViewInitialized = false;
+
+static float V_ClampViewModelValue(float value, float minimum, float maximum)
+{
+	if (value < minimum)
+		return minimum;
+	if (value > maximum)
+		return maximum;
+	return value;
+}
+
+static void V_SetViewModelPreset()
+{
+	if (gEngfuncs.Cmd_Argc() != 2)
+	{
+		gEngfuncs.Con_Printf("Usage: viewmodel_presetpos <1|2|3>\n");
+		return;
+	}
+
+	const int preset = atoi(gEngfuncs.Cmd_Argv(1));
+	const char* commands = nullptr;
+
+	switch (preset)
+	{
+	case 1:
+		commands = "viewmodel_offset_x 0\nviewmodel_offset_y 0\nviewmodel_offset_z 0\nviewmodel_fov 68\n";
+		break;
+	case 2:
+		commands = "viewmodel_offset_x 0.5\nviewmodel_offset_y -0.25\nviewmodel_offset_z -0.25\nviewmodel_fov 58\n";
+		break;
+	case 3:
+		commands = "viewmodel_offset_x -1\nviewmodel_offset_y -1\nviewmodel_offset_z -0.5\nviewmodel_fov 68\n";
+		break;
+	default:
+		gEngfuncs.Con_Printf("Usage: viewmodel_presetpos <1|2|3>\n");
+		return;
+	}
+
+	gEngfuncs.pfnClientCmd(commands);
+}
 
 // These cvars are not registered (so users can't cheat), so set the ->value field directly
 // Register these cvars in V_Init() if needed for easy tweaking
@@ -665,6 +712,29 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 	{
 		VectorCopy(view->angles, view->curstate.angles);
 	}
+
+	// User-configurable first-person weapon placement. These offsets only affect
+	// the viewmodel and never move the player's camera origin.
+	const float offsetX = V_ClampViewModelValue(viewmodel_offset_x->value, -2.0f, 2.5f);
+	const float offsetY = V_ClampViewModelValue(viewmodel_offset_y->value, -2.0f, 2.0f);
+	const float offsetZ = V_ClampViewModelValue(viewmodel_offset_z->value, -2.0f, 2.0f);
+	float viewModelForward[3], viewModelRight[3], viewModelUp[3];
+	AngleVectors(view->angles, viewModelForward, viewModelRight, viewModelUp);
+
+	for (i = 0; i < 3; ++i)
+	{
+		view->origin[i] += viewModelRight[i] * offsetX +
+			viewModelForward[i] * offsetY + viewModelUp[i] * offsetZ;
+	}
+
+	// GoldSrc exposes one projection FOV for the scene. This cvar scales the
+	// viewmodel geometry in the client studio renderer to approximate CS-style
+	// independent weapon FOV without changing the world/camera FOV.
+	const float requestedViewModelFov =
+		V_ClampViewModelValue(viewmodel_fov->value, 54.0f, 68.0f);
+	const float referenceHalfAngle = 68.0f * 0.00872664625f;
+	const float requestedHalfAngle = requestedViewModelFov * 0.00872664625f;
+	view->curstate.scale = tanf(referenceHalfAngle) / tanf(requestedHalfAngle);
 
 	// pushing the view origin down off of the same X/Z plane as the ent's origin will give the
 	// gun a very nice 'shifting' effect when the player looks up/down. If there is a problem
@@ -1694,7 +1764,12 @@ V_Init
 */
 void V_Init()
 {
+	if (g_bViewInitialized)
+		return;
+
+	g_bViewInitialized = true;
 	gEngfuncs.pfnAddCommand("centerview", V_StartPitchDrift);
+	gEngfuncs.pfnAddCommand("viewmodel_presetpos", V_SetViewModelPreset);
 
 	scr_ofsx = gEngfuncs.pfnRegisterVariable("scr_ofsx", "0", 0);
 	scr_ofsy = gEngfuncs.pfnRegisterVariable("scr_ofsy", "0", 0);
@@ -1704,10 +1779,15 @@ void V_Init()
 	v_centerspeed = gEngfuncs.pfnRegisterVariable("v_centerspeed", "500", 0);
 
 	cl_bobcycle = gEngfuncs.pfnRegisterVariable("cl_bobcycle", "0.8", 0); // best default for my experimental gun wag (sjb)
-	cl_bob = gEngfuncs.pfnRegisterVariable("cl_bob", "0.01", 0);		  // best default for my experimental gun wag (sjb)
+	cl_bob = gEngfuncs.pfnRegisterVariable("cl_bob", "0", 0);		  // best default for my experimental gun wag (sjb)
 	cl_bobup = gEngfuncs.pfnRegisterVariable("cl_bobup", "0.5", 0);
 	cl_waterdist = gEngfuncs.pfnRegisterVariable("cl_waterdist", "4", 0);
 	cl_chasedist = gEngfuncs.pfnRegisterVariable("cl_chasedist", "112", 0);
+
+	viewmodel_fov = gEngfuncs.pfnRegisterVariable("viewmodel_fov", "68", FCVAR_ARCHIVE);
+	viewmodel_offset_x = gEngfuncs.pfnRegisterVariable("viewmodel_offset_x", "0", FCVAR_ARCHIVE);
+	viewmodel_offset_y = gEngfuncs.pfnRegisterVariable("viewmodel_offset_y", "0", FCVAR_ARCHIVE);
+	viewmodel_offset_z = gEngfuncs.pfnRegisterVariable("viewmodel_offset_z", "0", FCVAR_ARCHIVE);
 }
 
 

@@ -33,6 +33,7 @@
 #include "weapons.h"
 #include "gamerules.h"
 #include "teamplay_gamerules.h"
+#include "game.h"
 
 CGlobalState gGlobalState;
 
@@ -525,6 +526,9 @@ void CWorld::Precache()
 
 	g_pGameRules = InstallGameRules();
 
+	// Load map-local configuration and sound/sentence replacements before precaching.
+	MapProfiles_LoadForCurrentMap();
+
 	//!!!UNDONE why is there so much Spawn code in the Precache function? I'll just keep it here
 
 	///!!!LATER - do we want a sound ent in deathmatch? (sjb)
@@ -759,6 +763,16 @@ bool CWorld::KeyValue(KeyValueData* pkvd)
 		{
 			pev->spawnflags |= SF_WORLD_FORCETEAM;
 		}
+		return true;
+	}
+	else if (FStrEq(pkvd->szKeyName, "forcepmodels"))
+	{
+		CVAR_SET_STRING("forcepmodels", pkvd->szValue);
+		return true;
+	}
+	else if (FStrEq(pkvd->szKeyName, "globalsoundlist"))
+	{
+		CVAR_SET_STRING("globalsoundlist", pkvd->szValue);
 		return true;
 	}
 

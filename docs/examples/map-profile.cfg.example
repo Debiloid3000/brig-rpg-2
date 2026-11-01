@@ -1,0 +1,7 @@
+// Example maps/<mapname>.cfg
+// Use player-model folder names that exist under models/player.
+forcepmodels "survivor_a,survivor_b,scientist"
+
+// One list handles ordinary non-weapon audio and named sentence replacements.
+// Relative to sound/: sound/<mapname>/soundrep.txt
+globalsoundlist "<mapname>/soundrep.txt"

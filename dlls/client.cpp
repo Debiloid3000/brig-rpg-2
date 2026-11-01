@@ -626,6 +626,15 @@ void ClientUserInfoChanged(edict_t* pEntity, char* infobuffer)
 	if (!pEntity->pvPrivateData)
 		return;
 
+	// Keep player model selection within the map's allowed model folders.
+	const char* currentModel = g_engfuncs.pfnInfoKeyValue(infobuffer, "model");
+	if (!MapProfiles_IsPlayerModelAllowed(currentModel))
+	{
+		const char* fallbackModel = MapProfiles_GetFirstPlayerModel();
+		if (fallbackModel && *fallbackModel)
+			g_engfuncs.pfnSetClientKeyValue(ENTINDEX(pEntity), infobuffer, "model", (char*)fallbackModel);
+	}
+
 	// msg everyone if someone changes their name,  and it isn't the first time (changing no name to current name)
 	if (!FStringNull(pEntity->v.netname) && STRING(pEntity->v.netname)[0] != 0 && !FStrEq(STRING(pEntity->v.netname), g_engfuncs.pfnInfoKeyValue(infobuffer, "name")))
 	{
@@ -691,6 +700,7 @@ void ServerDeactivate()
 	}
 
 	g_serveractive = 0;
+	MapProfiles_Clear();
 
 	// Peform any shutdown operations here...
 	//
@@ -725,6 +735,9 @@ void ServerActivate(edict_t* pEdictList, int edictCount, int clientMax)
 			ALERT(at_console, "Can't instance %s\n", STRING(pEdictList[i].v.classname));
 		}
 	}
+
+	// Register replacement audio after map entities have precached their resources.
+	MapProfiles_PrecacheAllSounds();
 
 	// Link user messages here to make sure first client can get them...
 	LinkUserMessages();
@@ -1010,6 +1023,7 @@ void ClientPrecache()
 	PRECACHE_SOUND("player/pl_pain7.wav");
 
 	PRECACHE_MODEL("models/player.mdl");
+	MapProfiles_PrecachePlayerModels();
 
 	// hud sounds
 
