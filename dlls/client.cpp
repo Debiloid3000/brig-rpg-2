@@ -620,39 +620,19 @@ userinfo - gives dll a chance to modify it before
 it gets sent into the rest of the engine.
 ========================
 */
-static bool BRIG_IsValidPlayerModelName(const char* modelName)
-{
-	if (!modelName || !*modelName || strlen(modelName) >= 32)
-		return false;
-
-	for (const unsigned char* p = (const unsigned char*)modelName; *p; ++p)
-	{
-		const unsigned char c = *p;
-		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '_' || c == '-'))
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
 void ClientUserInfoChanged(edict_t* pEntity, char* infobuffer)
 {
 	// Is the client spawned yet?
 	if (!pEntity->pvPrivateData)
 		return;
 
-	// A map profile may force a model directory for this map only.
-	const char* mapPlayerModel = BRIG_GetMapPlayerModel();
-	if (BRIG_IsValidPlayerModelName(mapPlayerModel))
+	// Keep player model selection within the map's allowed model folders.
+	const char* currentModel = g_engfuncs.pfnInfoKeyValue(infobuffer, "model");
+	if (!MapProfiles_IsPlayerModelAllowed(currentModel))
 	{
-		const char* currentModel = g_engfuncs.pfnInfoKeyValue(infobuffer, "model");
-		if (!currentModel || !FStrEq(currentModel, mapPlayerModel))
-		{
-			g_engfuncs.pfnSetClientKeyValue(ENTINDEX(pEntity), infobuffer, "model", mapPlayerModel);
-		}
+		const char* fallbackModel = MapProfiles_GetFirstPlayerModel();
+		if (fallbackModel && *fallbackModel)
+			g_engfuncs.pfnSetClientKeyValue(ENTINDEX(pEntity), infobuffer, "model", (char*)fallbackModel);
 	}
 
 	// msg everyone if someone changes their name,  and it isn't the first time (changing no name to current name)
@@ -720,6 +700,7 @@ void ServerDeactivate()
 	}
 
 	g_serveractive = 0;
+	MapProfiles_Clear();
 
 	// Peform any shutdown operations here...
 	//
@@ -754,6 +735,9 @@ void ServerActivate(edict_t* pEdictList, int edictCount, int clientMax)
 			ALERT(at_console, "Can't instance %s\n", STRING(pEdictList[i].v.classname));
 		}
 	}
+
+	// Register replacement audio after map entities have precached their resources.
+	MapProfiles_PrecacheAllSounds();
 
 	// Link user messages here to make sure first client can get them...
 	LinkUserMessages();
@@ -1039,17 +1023,7 @@ void ClientPrecache()
 	PRECACHE_SOUND("player/pl_pain7.wav");
 
 	PRECACHE_MODEL("models/player.mdl");
-
-	// The active map profile may force a player model folder. Precache that
-	// exact GoldSrc player model before clients receive the userinfo override.
-	const char* mapPlayerModel = BRIG_GetMapPlayerModel();
-	if (BRIG_IsValidPlayerModelName(mapPlayerModel))
-	{
-		char mapPlayerModelPath[96];
-		snprintf(mapPlayerModelPath, sizeof(mapPlayerModelPath),
-			"models/player/%s/%s.mdl", mapPlayerModel, mapPlayerModel);
-		PRECACHE_MODEL(mapPlayerModelPath);
-	}
+	MapProfiles_PrecachePlayerModels();
 
 	// hud sounds
 
