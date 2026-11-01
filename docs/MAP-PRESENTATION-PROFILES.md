@@ -61,12 +61,12 @@ These are personal client settings, not map-profile options. They are registered
 | Cvar | Default | Purpose | Accepted range |
 | --- | ---: | --- | ---: |
 | `default_fov` | 90 | Player/world camera FOV | Existing game limits |
-| `viewmodel_fov` | 68 | First-person weapon model size | 54–68 |
-| `viewmodel_offset_x` | 0 | Move weapon left/right | -2 to 2.5 |
-| `viewmodel_offset_y` | 0 | Move weapon forward/back | -2 to 2 |
-| `viewmodel_offset_z` | 0 | Move weapon down/up | -2 to 2 |
+| `viewmodel_fov` | 68 | First-person viewmodel scale/FOV approximation | 54–120 |
+| `viewmodel_offset_x` | 0 | Horizontal viewmodel offset | -20 to 20 |
+| `viewmodel_offset_y` | 0 | Forward/back viewmodel offset | -20 to 20 |
+| `viewmodel_offset_z` | 0 | Vertical viewmodel offset | -20 to 20 |
 
-The offsets are applied to the viewmodel only; they do not move the player's camera. The cvars are archived, so a player's chosen values persist after they change them.
+The offsets are applied to the viewmodel only; they do not move the player's camera. The cvars are archived, so a player's chosen values persist after they change them. The wider offset range is measured in GoldSrc world units. `viewmodel_fov` uses 68 as its neutral reference: values below 68 enlarge the viewmodel, while values above 68 shrink it.
 
 `viewmodel_fov` is implemented as a viewmodel-only geometry scale in the client Studio renderer. It changes the apparent size of the hands/weapon without changing the world-camera `default_fov`. GoldSrc exposes a shared scene projection through this client interface, so this is an FOV-style visual control rather than a separate renderer projection matrix identical to CS2.
 
@@ -82,12 +82,13 @@ A preset sets the four viewmodel cvars; the individual values can then be adjust
 
 ## Bob and camera roll defaults
 
-Both settings default to zero for a fresh client configuration:
+The client defaults are zero for all three classic bob controls:
 
-- `cl_bob 0` — disables weapon bob.
-- `cl_rollangle 0` — disables camera roll.
+- `cl_bob 0` — disables the bob amount.
+- `cl_bobcycle 0` and `cl_bobup 0` — accepted safely; the client skips the bob calculation instead of dividing by zero.
+- `cl_rollangle 0` — disables the client-side roll calculation.
 
-These are client defaults, not map-profile settings. Players can still change either value in their own config or console.
+The Steam Legacy engine also has a separate server-side strafing tilt. `sv_rollangle 0` is set in `game.cfg`, `listenserver.cfg` and `server.cfg` for locally hosted and dedicated games. When joining someone else's server, that server controls `sv_rollangle`; a client-side cvar cannot override it. `sv_rollspeed` remains 200 because the angle is zero.
 
 ## Asset layout
 
