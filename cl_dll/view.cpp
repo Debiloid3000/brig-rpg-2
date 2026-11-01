@@ -1774,18 +1774,18 @@ static void V_SetViewModelPreset()
 	switch (preset)
 	{
 	case 1:
-		commands = "viewmodel_offset_x 0\\nviewmodel_offset_y 0\\nviewmodel_offset_z 0\\nviewmodel_fov 68\\n";
+		commands = "viewmodel_offset_x 0\nviewmodel_offset_y 0\nviewmodel_offset_z 0\nviewmodel_fov 68\n";
 		break;
 	case 2:
 		// Larger, more centered weapon presentation.
-		commands = "viewmodel_offset_x 0.5\\nviewmodel_offset_y -0.25\\nviewmodel_offset_z -0.25\\nviewmodel_fov 58\\n";
+		commands = "viewmodel_offset_x 0.5\nviewmodel_offset_y -0.25\nviewmodel_offset_z -0.25\nviewmodel_fov 58\n";
 		break;
 	case 3:
 		// Classic left-leaning presentation.
-		commands = "viewmodel_offset_x -1\\nviewmodel_offset_y -1\\nviewmodel_offset_z -0.5\\nviewmodel_fov 68\\n";
+		commands = "viewmodel_offset_x -1\nviewmodel_offset_y -1\nviewmodel_offset_z -0.5\nviewmodel_fov 68\n";
 		break;
 	default:
-		gEngfuncs.Con_Printf("Usage: viewmodel_presetpos <1|2|3>\\n");
+		gEngfuncs.Con_Printf("Usage: viewmodel_presetpos <1|2|3>\n");
 		return;
 	}
 
