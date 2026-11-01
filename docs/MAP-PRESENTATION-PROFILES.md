@@ -14,10 +14,6 @@ viewmodel_offset_y 0
 viewmodel_offset_z 0
 viewmodel_fov 68
 viewmodel_presetpos 1
-
-// Optional: remove bob and camera roll.
-cl_bob 0
-cl_rollangle 0
 ```
 
 The offset variables move only the first-person weapon model:
