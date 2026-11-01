@@ -95,6 +95,7 @@ cvar_t* viewmodel_fov;
 cvar_t* viewmodel_offset_x;
 cvar_t* viewmodel_offset_y;
 cvar_t* viewmodel_offset_z;
+cvar_t* viewmodel_sway;
 static bool g_bViewInitialized = false;
 
 static void V_ViewModelHelp()
@@ -110,7 +111,7 @@ static void V_ViewModelHelp()
 	gEngfuncs.Con_Printf("viewmodel_offset_x %.2f (-2 to 2.5)\n", viewmodel_offset_x->value);
 	gEngfuncs.Con_Printf("viewmodel_offset_y %.2f (-2 to 2)\n", viewmodel_offset_y->value);
 	gEngfuncs.Con_Printf("viewmodel_offset_z %.2f (-2 to 2)\n", viewmodel_offset_z->value);
-	cl_entity_t* viewModel = gEngfuncs.GetViewModel();
+\tgEngfuncs.Con_Printf("viewmodel_sway %.0f (0=off, 1=on)\\n", viewmodel_sway ? viewmodel_sway->value : 0.0f);\n	cl_entity_t* viewModel = gEngfuncs.GetViewModel();
 	gEngfuncs.Con_Printf("Model: %s\n",
 		(viewModel && viewModel->model) ? viewModel->model->name : "<not loaded>");
 	gEngfuncs.Con_Printf("Presets: viewmodel_presetpos 1, 2 or 3\n");
@@ -431,11 +432,14 @@ void V_CalcGunAngle(struct ref_params_s* pparams)
 
 	viewent->angles[YAW] = pparams->viewangles[YAW] + pparams->crosshairangle[YAW];
 	viewent->angles[PITCH] = -pparams->viewangles[PITCH] + pparams->crosshairangle[PITCH] * 0.25;
-	viewent->angles[ROLL] -= v_idlescale * sin(pparams->time * v_iroll_cycle.value) * v_iroll_level.value;
+	if (viewmodel_sway && viewmodel_sway->value != 0.0f)
+	{
+		viewent->angles[ROLL] -= v_idlescale * sin(pparams->time * v_iroll_cycle.value) * v_iroll_level.value;
 
-	// don't apply all of the v_ipitch to prevent normally unseen parts of viewmodel from coming into view.
-	viewent->angles[PITCH] -= v_idlescale * sin(pparams->time * v_ipitch_cycle.value) * (v_ipitch_level.value * 0.5);
-	viewent->angles[YAW] -= v_idlescale * sin(pparams->time * v_iyaw_cycle.value) * v_iyaw_level.value;
+		// Don't apply all of the pitch idle movement to avoid exposing normally hidden model areas.
+		viewent->angles[PITCH] -= v_idlescale * sin(pparams->time * v_ipitch_cycle.value) * (v_ipitch_level.value * 0.5);
+		viewent->angles[YAW] -= v_idlescale * sin(pparams->time * v_iyaw_cycle.value) * v_iyaw_level.value;
+	}
 
 	VectorCopy(viewent->angles, viewent->curstate.angles);
 	VectorCopy(viewent->angles, viewent->latched.prevangles);
@@ -450,6 +454,9 @@ Idle swaying
 */
 void V_AddIdle(struct ref_params_s* pparams)
 {
+	if (!viewmodel_sway || viewmodel_sway->value == 0.0f)
+		return;
+
 	pparams->viewangles[ROLL] += v_idlescale * sin(pparams->time * v_iroll_cycle.value) * v_iroll_level.value;
 	pparams->viewangles[PITCH] += v_idlescale * sin(pparams->time * v_ipitch_cycle.value) * v_ipitch_level.value;
 	pparams->viewangles[YAW] += v_idlescale * sin(pparams->time * v_iyaw_cycle.value) * v_iyaw_level.value;
@@ -710,8 +717,9 @@ void V_CalcNormalRefdef(struct ref_params_s* pparams)
 	view->origin[2] += (waterOffset);
 	VectorAdd(view->origin, pparams->viewheight, view->origin);
 
-	// Let the viewmodel shake at about 10% of the amplitude
-	gEngfuncs.V_ApplyShake(view->origin, view->angles, 0.9);
+	// Optional viewmodel-only shake; disabled by default for a stable weapon presentation.
+	if (viewmodel_sway && viewmodel_sway->value != 0.0f)
+		gEngfuncs.V_ApplyShake(view->origin, view->angles, 0.9);
 
 	for (i = 0; i < 3; i++)
 	{
@@ -1782,7 +1790,7 @@ void V_Init()
 	viewmodel_offset_x = gEngfuncs.pfnRegisterVariable("viewmodel_offset_x", "0", FCVAR_ARCHIVE);
 	viewmodel_offset_y = gEngfuncs.pfnRegisterVariable("viewmodel_offset_y", "0", FCVAR_ARCHIVE);
 	viewmodel_offset_z = gEngfuncs.pfnRegisterVariable("viewmodel_offset_z", "0", FCVAR_ARCHIVE);
-}
+\tviewmodel_sway = gEngfuncs.pfnRegisterVariable("viewmodel_sway", "0", FCVAR_ARCHIVE);\n}
 
 
 //#define TRACE_TEST
