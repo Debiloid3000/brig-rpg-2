@@ -1487,7 +1487,7 @@ int V_FindViewModelByWeaponModel(int weaponindex)
 		{
 			if (!strnicmp(weaponModel->name, modelmap[i][0], len))
 			{
-				const char* prefix = CVAR_GET_STRING("brig_viewmodel_prefix");
+				const char* prefix = gEngfuncs.pfnGetCvarString("brig_viewmodel_prefix");
 				if (prefix && *prefix && BRIG_IsSafeAssetPrefixForClient(prefix))
 				{
 					const char* baseName = strrchr(modelmap[i][1], '/');
