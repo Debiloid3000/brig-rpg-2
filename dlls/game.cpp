@@ -60,6 +60,40 @@ const char* BRIG_GetMapPlayerModel()
 	return CVAR_GET_STRING("brig_map_player_model");
 }
 
+int BRIG_PrecacheModel(const char* model)
+{
+	if (!model)
+		return 0;
+
+	// Only swap first-person weapon models. World/player models stay untouched.
+	if (0 == strnicmp(model, "models/v_", 9))
+	{
+		const char* prefix = BRIG_GetMapViewModelPrefix();
+		if (prefix && 0 == strnicmp(prefix, "models/", 7) &&
+			BRIG_IsSafeAssetPrefix(prefix))
+		{
+			const char* baseName = strrchr(model, '/');
+			baseName = baseName ? baseName + 1 : model;
+			char profilePath[256];
+			const int written = snprintf(profilePath, sizeof(profilePath), "%s/%s", prefix, baseName);
+
+			if (written > 0 && (size_t)written < sizeof(profilePath))
+			{
+				int fileLength = 0;
+				byte* fileData = LOAD_FILE_FOR_ME(profilePath, &fileLength);
+				const bool exists = fileData != nullptr && fileLength > 0;
+				if (fileData)
+					FREE_FILE(fileData);
+
+				if (exists)
+					return g_engfuncs.pfnPrecacheModel(profilePath);
+			}
+		}
+	}
+
+	return g_engfuncs.pfnPrecacheModel((char*)model);
+}
+
 const char* BRIG_GetMapVoicePrefix()
 {
 	return CVAR_GET_STRING("brig_map_voice_prefix");
