@@ -3248,11 +3248,7 @@ static edict_t* GiveNamedItem_Common(entvars_t* pev, const char* pszName)
 	VARS(pent)->origin = pev->origin;
 	pent->v.spawnflags |= SF_NORESPAWN;
 
-	// These are player inventory grants, not map-placed pickups. Keep them
-	// outside the map weapon-pickup allowlist.
-	BRIG_BeginPlayerItemSpawn();
 	DispatchSpawn(pent);
-	BRIG_EndPlayerItemSpawn();
 
 	return pent;
 }
