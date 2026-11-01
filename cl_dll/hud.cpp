@@ -624,12 +624,28 @@ float HUD_GetFOV()
 	return g_lastFOV;
 }
 
+int CHud::GetDefaultFOV() const
+{
+	const float configuredFov = default_fov ? default_fov->value : 90.0f;
+
+	// Avoid invalid engine FOV values, including NaN, while preserving runtime
+	// changes to default_fov.
+	if (configuredFov != configuredFov)
+		return 90;
+	if (configuredFov < 1.0f)
+		return 1;
+	if (configuredFov > 179.0f)
+		return 179;
+
+	return static_cast<int>(configuredFov + 0.5f);
+}
+
 bool CHud::MsgFunc_SetFOV(const char* pszName, int iSize, void* pbuf)
 {
 	BEGIN_READ(pbuf, iSize);
 
 	int newfov = READ_BYTE();
-	int def_fov = CVAR_GET_FLOAT("default_fov");
+	const int def_fov = GetDefaultFOV();
 
 	//Weapon prediction already takes care of changing the fog. ( g_lastFOV ).
 	//But it doesn't restore correctly so this still needs to be used
@@ -641,13 +657,11 @@ bool CHud::MsgFunc_SetFOV(const char* pszName, int iSize, void* pbuf)
 	g_lastFOV = newfov;
 
 	if (newfov == 0)
-	{
 		m_iFOV = def_fov;
-	}
+	else if (newfov > 179)
+		m_iFOV = 179;
 	else
-	{
 		m_iFOV = newfov;
-	}
 
 	// the clients fov is actually set in the client data update section of the hud
 
@@ -660,7 +674,7 @@ bool CHud::MsgFunc_SetFOV(const char* pszName, int iSize, void* pbuf)
 	else
 	{
 		// set a new sensitivity that is proportional to the change from the FOV default
-		m_flMouseSensitivity = sensitivity->value * ((float)newfov / (float)def_fov) * CVAR_GET_FLOAT("zoom_sensitivity_ratio");
+		m_flMouseSensitivity = sensitivity->value * ((float)m_iFOV / (float)def_fov) * CVAR_GET_FLOAT("zoom_sensitivity_ratio");
 	}
 
 	return true;
