@@ -27,6 +27,8 @@
 #include "pm_defs.h"
 #include "pm_materials.h"
 #include "pm_shared.h"
+#include <stdio.h>
+#include <string.h>
 
 static char* memfgets(byte* pMemFile, int fileSize, int& filePos, char* pBuffer, int bufferSize);
 
@@ -62,7 +64,7 @@ static bool BRIG_IsSafeVoicePrefix(const char* prefix)
 
 static bool BRIG_ProfileSoundPath(const char* sample, char* output, size_t outputSize)
 {
-	if (!sample || !*sample || *sample == '!')
+	if (!sample || !*sample || *sample == '!' || *sample == '/' || *sample == '\\' || strstr(sample, ".."))
 		return false;
 
 	const char* prefix = BRIG_GetMapSoundPrefix();
@@ -98,7 +100,7 @@ static bool BRIG_ProfileSoundPath(const char* sample, char* output, size_t outpu
 	return exists;
 }
 
-int BRIG_PrecacheSound(char* sample)
+int BRIG_PrecacheSound(const char* sample)
 {
 	if (!sample)
 		return 0;
@@ -107,7 +109,7 @@ int BRIG_PrecacheSound(char* sample)
 	if (BRIG_ProfileSoundPath(sample, profilePath, sizeof(profilePath)))
 		return g_engfuncs.pfnPrecacheSound(profilePath);
 
-	return g_engfuncs.pfnPrecacheSound(sample);
+	return g_engfuncs.pfnPrecacheSound((char*)sample);
 }
 
 
