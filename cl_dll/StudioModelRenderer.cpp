@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <memory.h>
+#include <math.h>
 
 #include "studio_util.h"
 #include "r_studioint.h"
@@ -25,6 +26,15 @@ extern cvar_t* viewmodel_fov;
 extern cvar_t* viewmodel_offset_x;
 extern cvar_t* viewmodel_offset_y;
 extern cvar_t* viewmodel_offset_z;
+
+static float StudioClampViewModelValue(float value, float minimum, float maximum)
+{
+	if (value < minimum)
+		return minimum;
+	if (value > maximum)
+		return maximum;
+	return value;
+}
 
 extern cvar_t* tfc_newmodels;
 
@@ -535,11 +545,11 @@ void CStudioModelRenderer::StudioSetUpTransform(bool trivial_accept)
 	if (isViewModel)
 	{
 		const float offsetX = viewmodel_offset_x
-			? max(-2.0f, min(2.5f, viewmodel_offset_x->value)) : 0.0f;
+			? StudioClampViewModelValue(viewmodel_offset_x->value, -2.0f, 2.5f) : 0.0f;
 		const float offsetY = viewmodel_offset_y
-			? max(-2.0f, min(2.0f, viewmodel_offset_y->value)) : 0.0f;
+			? StudioClampViewModelValue(viewmodel_offset_y->value, -2.0f, 2.0f) : 0.0f;
 		const float offsetZ = viewmodel_offset_z
-			? max(-2.0f, min(2.0f, viewmodel_offset_z->value)) : 0.0f;
+			? StudioClampViewModelValue(viewmodel_offset_z->value, -2.0f, 2.0f) : 0.0f;
 
 		float viewForward[3], viewRight[3], viewUp[3];
 		AngleVectors(m_pCurrentEntity->angles, viewForward, viewRight, viewUp);
@@ -550,7 +560,7 @@ void CStudioModelRenderer::StudioSetUpTransform(bool trivial_accept)
 		}
 
 		const float requestedFov = viewmodel_fov
-			? max(54.0f, min(68.0f, viewmodel_fov->value)) : 68.0f;
+			? StudioClampViewModelValue(viewmodel_fov->value, 54.0f, 68.0f) : 68.0f;
 		const float referenceHalfAngle = 68.0f * 0.00872664625f;
 		const float requestedHalfAngle = requestedFov * 0.00872664625f;
 		const float viewModelScale = tanf(referenceHalfAngle) / tanf(requestedHalfAngle);
