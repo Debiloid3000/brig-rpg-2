@@ -12,7 +12,18 @@ import zipfile
 from pathlib import Path
 
 from brig_assets import digest, pe_check
-from validate_brig import ROOT, validate
+from validate_brig import MAP_METADATA_FILES, ROOT, validate
+
+
+def copy_map_metadata(stage: Path) -> None:
+    """Copy only the explicitly registered map metadata files into a mod stage."""
+    for name in MAP_METADATA_FILES:
+        source = ROOT / "_folder/brig" / name
+        if not source.is_file():
+            raise ValueError(f"required map metadata source is missing: {name}")
+        target = stage / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
 
 
 def package(source: Path, client: Path, server: Path, output: Path, version: str, commit: str) -> Path:
@@ -30,6 +41,10 @@ def package(source: Path, client: Path, server: Path, output: Path, version: str
             target = stage / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source / name, target)
+
+        # The central registry/CFG files are source-owned metadata, not borrowed assets.
+        copy_map_metadata(stage)
+
         for binary, dest in ((client, "cl_dlls/client.dll"), (server, "dlls/hl.dll")):
             target = stage / dest
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -37,7 +52,8 @@ def package(source: Path, client: Path, server: Path, output: Path, version: str
         build = {"version": version, "commit": commit, "platform": "windows-x86", "engine": "steam_legacy",
                  "dll_sha256": {"cl_dlls/client.dll": digest(client), "dlls/hl.dll": digest(server)}}
         (stage / "BUILD.json").write_text(json.dumps(build, indent=2) + "\n", encoding="utf-8")
-        print(json.dumps(validate(stage, ROOT / "docs/brig-assets.json", require_dlls=True), indent=2))
+        print(json.dumps(validate(stage, ROOT / "docs/brig-assets.json",
+                                  require_dlls=True, require_map_metadata=True), indent=2))
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6, allowZip64=True) as zipped:
             for path in sorted(stage.rglob("*")):
                 if path.is_file():

@@ -1,7 +1,25 @@
-// Example maps/<mapname>.cfg
-// Use player-model folder names that exist under models/player.
-forcepmodels "survivor_a,survivor_b,scientist"
+// Example maps/<mapname>.cfg — copy and rename for a real BSP.
+brig_title "Example Custom Campaign Map"
+brig_campaign "my_campaign"
+brig_campaign_title "My Custom Campaign"
+brig_category "custom"
+brig_chapter "arrival"
+brig_chapter_title "Arrival"
+brig_chapter_order 1
+brig_map_order 1
+brig_campaign_start 1
 
-// One list handles ordinary non-weapon audio and named sentence replacements.
-// Relative to sound/: sound/<mapname>/soundrep.txt
-globalsoundlist "<mapname>/soundrep.txt"
+// A map may be enabled for several modes. Zero removes it from that mode's list.
+brig_singleplayer 1
+brig_coop 1
+brig_deathmatch 0
+brig_team_deathmatch 0
+brig_default_mode "coop"
+
+// Legacy Map Presentation Profile settings remain supported.
+// Use folders and matching models that actually exist under models/player.
+forcepmodels "scientist,barney"
+
+// One file handles ordinary audio and named sentence replacements.
+// Relative paths are resolved under sound/: sound/example/soundrep.txt
+globalsoundlist "example/soundrep.txt"

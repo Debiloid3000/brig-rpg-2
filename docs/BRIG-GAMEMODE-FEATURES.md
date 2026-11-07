@@ -110,3 +110,8 @@ The repository CI is the validation path for this change:
 - Existing Python tests, asset policy validation and packaging checks.
 
 This branch has not been tested inside a running Steam Legacy game in this change. In particular, verify: Singleplayer Barnacle capture remains unchanged; Co-op capture blocks the caught player's item input; killing a Barnacle releases a living player; death followed by respawn clears the capture flag; an NPC killed while captured does not return to the idle state; existing BSPs without `info_player_coop` continue to load. Do not mark the full Co-op mode complete until these tests and dedicated Co-op gamerules/spawn behavior are implemented.
+
+
+## Map catalog dependency
+
+The future menu and session prompts must use the single registry and map-local metadata contract in [BRIG-MAP-CATALOG.md](BRIG-MAP-CATALOG.md). The map's declared available modes are content metadata; they do not create or complete the corresponding GameRules implementation by themselves.

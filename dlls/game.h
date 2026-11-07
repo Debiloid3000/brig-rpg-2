@@ -18,6 +18,12 @@
 extern void GameDLLInit( void );
 void GameDLLShutdown();
 
+void MapCatalog_Refresh();
+void MapCatalog_Print();
+int MapCatalog_GetAvailableMapCount();
+const char* MapCatalog_GetAvailableMapName(int index);
+bool MapCatalog_IsAllowedForMultiplayer(const char* mapName, bool teamDeathmatch);
+
 void MapProfiles_Clear();
 void MapProfiles_LoadForCurrentMap();
 void MapProfiles_PrecachePlayerModels();

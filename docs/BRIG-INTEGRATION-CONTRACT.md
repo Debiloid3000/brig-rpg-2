@@ -44,3 +44,31 @@ A preset is only a starting layout. Users can subsequently edit each CVAR indepe
 | Build | Build `Release | Win32` with the repository's Visual Studio solution and run the repository tests. |
 
 The Windows x86 CI workflow is the automated build authority. A successful DLL build does not replace a Steam Legacy runtime check; runtime-only cases must be reported separately when that environment is unavailable.
+
+
+## Unified map catalog
+
+The repository source registry is `_folder/brig/maps/brig_maplist.txt`; per-map metadata lives beside the BSPs in `_folder/brig/maps/<mapname>.cfg`. At runtime they resolve to `maps/brig_maplist.txt` and `maps/<mapname>.cfg` inside the installed mod. Singleplayer, Create Game, Co-op, DeathMatch, Team DeathMatch, lobby, and map rotation must all consume this same catalog. Do not maintain a second BSP list in any UI or game-mode subsystem.
+
+The server-side catalog implementation is shared through `game_shared/map_catalog.h` and exposed through the game DLL bridge:
+- `MapCatalog_Refresh()`
+- `MapCatalog_GetAvailableMapCount()`
+- `MapCatalog_GetAvailableMapName(index)`
+- `MapCatalog_IsAllowedForMultiplayer(mapName, teamDeathmatch)`
+- `MapCatalog_Print()`
+
+The debug/administration commands `brig_mapcatalog_reload` and `brig_mapcatalog_list` refresh and inspect that same list. The existing `sv_load_all_maps` diagnostic now uses the registered catalog and preserves manifest order. The engine filesystem's `FindFirst/FindNext` BSP enumeration is only a compatibility fallback when `maps/brig_maplist.txt` is missing or unreadable.
+
+The future client menu should read the same manifest through its initialized Legacy-compatible `IFileSystem`, then use the shared parser from `game_shared/map_catalog.h` for IDs and per-map CFG metadata. It must not invent a separate campaign list or assume that an installed BSP implies support for a campaign's entities/resources.
+
+### Map/session ownership
+
+- **Map catalog** owns map registration and map metadata, not session choices.
+- **Map CFG** owns map-specific presentation compatibility and the map's declared mode availability/default.
+- **Session/Create Game/Lobby** owns the user's selected mode and session options.
+- **GameRules** remains the authority for actual gameplay behavior; map metadata is validated against the selected mode before starting the map.
+- **Menu/UI** reads catalog metadata and writes session configuration; it does not directly mutate entities or gameplay state.
+
+### Map rotation
+
+The existing `mapcycle.txt` remains the server operator's ordering and player-count filter, not a second map database. Before a selected entry is accepted, the game checks it against the central catalog and the active DeathMatch or Team DeathMatch availability flag. Unsupported/stale entries are skipped; if player-count filters exclude all otherwise valid entries, the first catalog-approved cycle entry is used. If the cycle has no valid entry, a catalog-approved map for the active mode is selected; if none exists, the server stays on the current map and logs a warning.

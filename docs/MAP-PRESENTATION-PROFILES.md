@@ -119,3 +119,12 @@ This is an example layout, not a claim that these model folders or audio files a
 ## Map changes and reset behavior
 
 Map-local `forcepmodels` and `globalsoundlist` settings are cleared when the server deactivates a map. The next map loads its own worldspawn values, CFG and sound replacement list, so the previous map's player-model restrictions and dialogue substitutions are not intentionally carried over.
+
+
+## Unified map catalog and typed metadata (new)
+
+The old Map Presentation Profile settings are now part of the shared map CFG system. See [BRIG-MAP-CATALOG.md](BRIG-MAP-CATALOG.md) for the catalog manifest, all metadata fields, mode availability, CFG validation rules, and future menu integration.
+
+The server reads `maps/<mapname>.cfg` as typed data. It no longer executes that file with the console `exec` command. Only the documented `brig_*`, `forcepmodels`, and `globalsoundlist` keys are accepted. Unknown keys, arbitrary console commands, duplicate keys, malformed values, and unsafe paths are ignored and logged.
+
+The existing `forcepmodels` and `globalsoundlist` worldspawn keys and CVARs remain supported. Explicit values in a map CFG override worldspawn values; absent CFG keys leave worldspawn values intact. `ServerDeactivate` clears map-local settings before the next map is initialized.

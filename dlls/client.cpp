@@ -820,29 +820,16 @@ static void LoadAllMaps()
 		return;
 	}
 
-	FileFindHandle_t handle = FILESYSTEM_INVALID_FIND_HANDLE;
+	MapCatalog_Refresh();
+	const int mapCount = MapCatalog_GetAvailableMapCount();
 
-	const char* fileName = g_pFileSystem->FindFirst("maps/*.bsp", &handle);
-
-	if (fileName != nullptr)
+	// LoadNextMap() consumes from the back, so reverse the catalog here to
+	// preserve the manifest's explicit order.
+	for (int i = mapCount - 1; i >= 0; --i)
 	{
-		do
-		{
-			std::string mapName = fileName;
-			mapName.resize(mapName.size() - 4);
-
-			if (std::find_if(g_MapsToLoad.begin(), g_MapsToLoad.end(), [=](const auto& candidate)
-					{ return 0 == stricmp(candidate.c_str(), mapName.c_str()); }) == g_MapsToLoad.end())
-			{
-				g_MapsToLoad.push_back(std::move(mapName));
-			}
-		} while ((fileName = g_pFileSystem->FindNext(handle)) != nullptr);
-
-		g_pFileSystem->FindClose(handle);
-
-		// Sort in reverse order so the first map in alphabetic order is loaded first.
-		std::sort(g_MapsToLoad.begin(), g_MapsToLoad.end(), [](const auto& lhs, const auto& rhs)
-			{ return rhs < lhs; });
+		const char* mapName = MapCatalog_GetAvailableMapName(i);
+		if (mapName && *mapName)
+			g_MapsToLoad.emplace_back(mapName);
 	}
 
 	if (!g_MapsToLoad.empty())
@@ -850,37 +837,38 @@ static void LoadAllMaps()
 		if (CMD_ARGC() == 2)
 		{
 			const char* firstMapToLoad = CMD_ARGV(1);
+			auto it = std::find_if(g_MapsToLoad.begin(), g_MapsToLoad.end(),
+				[firstMapToLoad](const auto& candidate)
+				{ return 0 == stricmp(candidate.c_str(), firstMapToLoad); });
 
-			// Clear out all maps that would have been loaded before this one.
-			if (auto it = std::find(g_MapsToLoad.begin(), g_MapsToLoad.end(), firstMapToLoad);
-				it != g_MapsToLoad.end())
+			if (it != g_MapsToLoad.end())
 			{
-				const std::size_t numberOfMapsToSkip = g_MapsToLoad.size() - (it - g_MapsToLoad.begin());
-
+				const std::size_t numberOfMapsToSkip =
+					g_MapsToLoad.size() - static_cast<std::size_t>(it - g_MapsToLoad.begin());
 				g_MapsToLoad.erase(it + 1, g_MapsToLoad.end());
-
 				pmove->Con_Printf("Skipping %d maps to start with \"%s\"\n",
 					static_cast<int>(numberOfMapsToSkip), g_MapsToLoad.back().c_str());
 			}
 			else
 			{
-				pmove->Con_Printf("Unknown map \"%s\", starting from beginning\n", firstMapToLoad);
+				pmove->Con_Printf("Unknown catalog map \"%s\", starting from beginning\n", firstMapToLoad);
 			}
 		}
 
-		pmove->Con_Printf("Loading %d maps one at a time to generate files\n", static_cast<int>(g_MapsToLoad.size()));
-
-		// Load the first map right now.
+		pmove->Con_Printf("Loading %d catalog maps one at a time to generate files\n",
+			static_cast<int>(g_MapsToLoad.size()));
 		LoadNextMap();
 	}
 	else
 	{
-		pmove->Con_Printf("No maps to load\n");
+		pmove->Con_Printf("No usable maps in BRIG map catalog\n");
 	}
 }
 
 void InitMapLoadingUtils()
 {
+	g_engfuncs.pfnAddServerCommand("brig_mapcatalog_reload", &MapCatalog_Refresh);
+	g_engfuncs.pfnAddServerCommand("brig_mapcatalog_list", &MapCatalog_Print);
 	g_engfuncs.pfnAddServerCommand("sv_load_all_maps", &LoadAllMaps);
 	// Escape hatch in case the command is executed in error.
 	g_engfuncs.pfnAddServerCommand("sv_stop_loading_all_maps", []()
