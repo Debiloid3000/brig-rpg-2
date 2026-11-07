@@ -26,7 +26,7 @@ Implemented in `dlls/gamemode_features.h`:
 
 | Mode | Multiplayer | Player respawn | Friendly player relationships | Player-vs-player damage | Barnacle input lock |
 |---|---:|---:|---:|---:|---:|
-| Singleplayer | No | No | No | No | No |
+| Singleplayer | No | Yes | No | No | No |
 | Co-op | Yes | Yes | Yes | No | Yes |
 | Deathmatch | Yes | Yes | No | Yes | No |
 | Team Deathmatch | Yes | Yes | Yes | Yes | No |
