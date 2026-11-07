@@ -22,7 +22,7 @@ struct BrigGameModeFeatures
 	bool lockWeaponInputWhileBarnacled;
 };
 
-inline BrigGameMode BrigResolveGameMode(const CGameRules& rules)
+inline BrigGameMode BrigResolveGameMode(CGameRules& rules)
 {
 	if (rules.IsCoOp())
 	{
