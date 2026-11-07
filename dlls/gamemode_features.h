@@ -52,6 +52,6 @@ inline BrigGameModeFeatures BrigGetGameModeFeatures(BrigGameMode mode)
 
 	case BrigGameMode::SinglePlayer:
 	default:
-		return {false, false, false, false, false};
+		return {false, true, false, false, false};
 	}
 }
