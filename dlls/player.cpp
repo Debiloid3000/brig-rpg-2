@@ -36,6 +36,7 @@
 #include "shake.h"
 #include "decals.h"
 #include "gamerules.h"
+#include "gamemode_features.h"
 #include "game.h"
 #include "pm_shared.h"
 #include "hltv.h"
@@ -3809,6 +3810,15 @@ Called every frame by the player PreThink
 */
 void CBasePlayer::ItemPreFrame()
 {
+	// In Co-op, a player caught by a Barnacle cannot use their held item to attack it.
+	// Singleplayer and Deathmatch keep the original Half-Life behavior.
+	if (g_pGameRules &&
+		(m_afPhysicsFlags & PFLAG_ONBARNACLE) != 0 &&
+		BrigGetGameModeFeatures(BrigResolveGameMode(*g_pGameRules)).lockWeaponInputWhileBarnacled)
+	{
+		return;
+	}
+
 #if defined(CLIENT_WEAPONS)
 	if (m_flNextAttack > 0)
 #else
@@ -3834,6 +3844,15 @@ Called every frame by the player PostThink
 */
 void CBasePlayer::ItemPostFrame()
 {
+	// Do not process weapon input while a Co-op player is held by a Barnacle.
+	// The Barnacle release/death path clears PFLAG_ONBARNACLE and restores input.
+	if (g_pGameRules &&
+		(m_afPhysicsFlags & PFLAG_ONBARNACLE) != 0 &&
+		BrigGetGameModeFeatures(BrigResolveGameMode(*g_pGameRules)).lockWeaponInputWhileBarnacled)
+	{
+		return;
+	}
+
 	// check if the player is using a tank
 	if (m_pTank != NULL)
 		return;
