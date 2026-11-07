@@ -19,11 +19,11 @@ Each non-comment manifest line is one BSP identifier, without a path or extensio
 
 The current manifest registers **115 BSPs** already present in the audited BRIG mod directory:
 
-- **96 Half-Life 1 campaign maps** across the 15 story chapters, declared for Singleplayer and Co-op in map metadata. Co-op gameplay is not implemented yet; the future mode/session layer must prevent launching it until GameRules, spawn handling and runtime checks are ready.
+- **96 Half-Life 1 campaign maps** across the 15 story chapters, declared for Singleplayer and Co-op in map metadata. The Co-op flag expresses intended map/campaign eligibility; it does not activate the game mode or certify that the campaign is playable in Co-op.
 - **7 Hazard Course maps**, marked Singleplayer-only.
 - **12 Half-Life Deathmatch arenas**, marked DeathMatch and Team DeathMatch.
 
-Every registered map has its own CFG. Co-op is declared for HL1 story maps in CFG metadata, but it is not yet an implemented runtime mode. The feature registry must continue to gate the mode until a later Co-op implementation. Blue Shift and Opposing Force are not registered as playable campaigns in this pass.
+Every registered map has its own CFG. The branch already has Co-op mode identification and a small amount of mode-specific behavior, but it does not yet have a complete, tested Co-op game-rules and campaign implementation. Map metadata does not enable that gameplay. The later Co-op work still needs dedicated rules, spawn-point selection/fallbacks, respawn behavior and campaign/runtime validation. Blue Shift and Opposing Force are not registered as playable campaigns in this pass.
 
 A map is returned by the runtime catalog only when its identifier is safe and the corresponding `maps/<id>.bsp` exists and has GoldSrc BSP version 30. Missing or invalid BSPs are logged and skipped; they are not offered to map selection or the `sv_load_all_maps` diagnostic.
 
@@ -118,7 +118,7 @@ If a BSP is registered but its CFG is missing, its metadata defaults to:
 - Co-op, DeathMatch and Team DeathMatch = disabled.
 - Default mode = Singleplayer.
 
-This conservative fallback does not claim that a campaign or an expansion is supported. A map with no enabled mode remains registered in the catalog data, but it should not appear in any mode's selection list. A declared `brig_coop 1` alone is not permission to launch Co-op while the runtime feature registry says the mode is unavailable.
+This conservative fallback does not claim that a campaign or an expansion is supported. A map with no enabled mode remains registered in the catalog data, but it should not appear in any mode's selection list. A declared `brig_coop 1` is only a map-level eligibility declaration; the menu/session launch path must also verify that the selected mode is actually implemented and supported.
 
 If `maps/brig_maplist.txt` is missing, BSP discovery is used only as a fallback. If both the list and BSP are missing, the map is not available.
 
