@@ -179,7 +179,12 @@ void CBaseMonster::BarnacleVictimBitten(entvars_t* pevBarnacle)
 //=========================================================
 void CBaseMonster::BarnacleVictimReleased()
 {
-	m_IdealMonsterState = MONSTERSTATE_IDLE;
+	// Do not revive a monster that died while being lifted by a Barnacle.
+	// This matches the Half-Life Updated fix and is independent of game mode.
+	if (!HasMemory(bits_MEMORY_KILLED) && pev->deadflag == DEAD_NO && pev->health > 0)
+	{
+		m_IdealMonsterState = MONSTERSTATE_IDLE;
+	}
 
 	pev->velocity = g_vecZero;
 	pev->movetype = MOVETYPE_STEP;
