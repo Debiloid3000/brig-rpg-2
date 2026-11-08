@@ -1035,21 +1035,6 @@ std::string CBrigMainMenuPanel::BuildCreateGameText() const
          << MenuText(session.lan ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
              session.lan ? "Enabled" : "Disabled") << "\n\n";
 
-    text << MenuText("BRIG_Menu_ModeStatusIntro", "Available game modes:") << "\n";
-    const BrigMapCatalog::GameMode modes[] = {
-        BrigMapCatalog::GameMode::SinglePlayer,
-        BrigMapCatalog::GameMode::CoOp,
-        BrigMapCatalog::GameMode::Deathmatch,
-        BrigMapCatalog::GameMode::TeamDeathmatch
-    };
-    for (const auto mode : modes)
-    {
-        const auto& descriptor = BrigGameModeRegistry::GetDescriptor(mode);
-        text << MenuText(ModeToken(mode), ModeFallback(mode)) << " - "
-             << MenuText(descriptor.statusToken,
-                 descriptor.gameplayReady ? "Available" : "Not implemented in this stage")
-             << "\n";
-    }
     return text.str();
 }
 

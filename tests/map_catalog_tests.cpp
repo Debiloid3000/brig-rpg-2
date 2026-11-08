@@ -263,6 +263,10 @@ int main()
     assert(navigation.CurrentPage() == BrigMenuNavigation::Page::PlayHub);
     assert(navigation.Navigate(BrigMenuNavigation::Action::CreateGame));
     assert(navigation.CurrentPage() == BrigMenuNavigation::Page::CreateGame);
+    assert(navigation.NavigateTo(BrigMenuNavigation::Page::CreateGameMaps));
+    assert(navigation.CurrentPage() == BrigMenuNavigation::Page::CreateGameMaps);
+    assert(navigation.Back());
+    assert(navigation.CurrentPage() == BrigMenuNavigation::Page::CreateGame);
     assert(navigation.Back());
     assert(navigation.Navigate(BrigMenuNavigation::Action::GameSettings));
     assert(navigation.Back());
