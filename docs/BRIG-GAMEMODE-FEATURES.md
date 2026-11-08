@@ -1,7 +1,7 @@
 # BRIG RPG 2 — Game Modes and Feature Porting
 
 **Target:** Half-Life Steam Legacy, Windows x86.  
-**Status:** Singleplayer, DeathMatch, Team DeathMatch and the Co-op listen-server launch path are wired. Co-op uses the stock GoldSrc changelevel pipeline with a Co-op-specific activator/catalog guard. Steam Legacy multi-client runtime verification is still required.
+**Status:** Singleplayer, DeathMatch, Team DeathMatch and the Co-op listen-server launch path are wired. Co-op uses the stock GoldSrc changelevel pipeline with a catalog guard and dedicated-server-safe player-in-volume lookup for scripted activators. Steam Legacy multi-client runtime verification is still required.
 
 ## Compatibility contract
 
@@ -44,7 +44,7 @@ The resolver deliberately checks IsCoOp() first. All four supported modes pass t
 - `InstallGameRules()` selects `CHalfLifeCoOp` whenever the engine's `coop` global is enabled, before the Singleplayer and Deathmatch branches.
 - `CHalfLifeCoOp` is multiplayer for connection/HUD/respawn purposes, but is not Deathmatch. It uses the normal Singleplayer skill values, always allows campaign monsters, follows `mp_flashlight` for the flashlight, and awards zero frag points for player kills.
 - Damage from another player is rejected by default; `mp_friendlyfire` can enable it. Player-to-player relationship queries return `GR_TEAMMATE`.
-- Co-op does not run inherited DeathMatch time/frag-limit intermissions or the DeathMatch mapcycle. Story progression is controlled by map-authored `trigger_changelevel` entities.
+- Co-op does not run inherited DeathMatch time/frag-limit intermissions or the DeathMatch mapcycle. It forces `mp_timelimit 0`, `mp_fraglimit 0` and `mp_allowmonsters 1` at launch. Story progression is controlled by map-authored `trigger_changelevel` entities.
 - Co-op spawn selection cycles through `info_player_coop` points first and checks that a point is enabled and not occupied by another player. It then tries unoccupied `info_player_start` points; if every usable point is occupied, it falls back to the first usable point without killing another player. A named level-transition start spot keeps priority over ordinary spawn points.
 - When a Co-op player is captured by a Barnacle and has `PFLAG_ONBARNACLE`, BRIG skips item pre-frame and post-frame processing so the captured player cannot use their held item. Existing release handling clears the flag when the Barnacle is killed; player spawn also resets the physics flags.
 - Co-op death does not create a temporary weapon box or strip the player's inventory. Weapon entity links and ammo remain intact, and the active weapon is deployed again on respawn.
@@ -102,7 +102,7 @@ The supplied Sven Co-op source link is the official wiki rather than a game-code
 Co-op deliberately uses the original GoldSrc trigger_changelevel / CHANGE_LEVEL mechanism rather than a BRIG-specific map sequencer:
 
 - Singleplayer is unchanged: the trigger checks the Legacy local player, resolves its landmark and calls CHANGE_LEVEL as before.
-- In Co-op, the player who touches or activates the trigger is used for the transition-volume check. This avoids assuming that the listen-server host is the player who activated the trigger and supports a dedicated server with no listen-server local player.
+- In Co-op, the player who touches the trigger is preferred for the transition-volume check. If a map entity activates the trigger (or the player activator is outside the volume), the server searches connected clients and uses the first player inside the matching `trigger_transition` volume. This works without a listen-server local player.
 - Before changing maps, Co-op checks the destination against the server's shared map catalog. The target must have an installed GoldSrc BSP and a CFG declaring brig_coop 1.
 - A valid trigger calls the same CHANGE_LEVEL(map, landmark) engine entry point. The server owns the transition; clients do not issue independent map commands. The engine's standard landmark/player transfer path remains responsible for carrying connected players into the new server level.
 - A first valid activation initiates the whole server transition; this is not an all-players-ready barrier. Mappers remain responsible for the map and landmark keys and any trigger_transition volumes.

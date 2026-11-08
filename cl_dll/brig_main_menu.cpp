@@ -1626,8 +1626,8 @@ std::string CBrigMainMenuPanel::BuildSessionText() const
     text << MenuText("BRIG_Menu_SessionCheats", "SV_CHEATS") << ": "
          << MenuText(session.allowCheats ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
              session.allowCheats ? "Enabled" : "Disabled") << "\n\n";
-    text << MenuText("BRIG_Menu_SessionSettingsNextStage",
-        "Editable server and connection settings will be added in the next stage.");
+    text << MenuText("BRIG_Menu_ServerSettings",
+        "Open Server Settings to edit the listen-server rules.");
     return text.str();
 }
 
