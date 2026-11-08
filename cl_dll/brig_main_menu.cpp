@@ -678,6 +678,11 @@ bool LaunchSingleplayerMap(const std::string& mapId)
 
     const std::string mapCommand = "map " + mapId + "\n";
     gEngfuncs.pfnClientCmd(mapCommand.c_str());
+
+    // Map CFG/server defaults can change these during startup; the selected
+    // Singleplayer session remains authoritative once the map has loaded.
+    gEngfuncs.pfnClientCmd(skillCommand);
+    gEngfuncs.pfnClientCmd(session.allowCheats ? "sv_cheats 1\n" : "sv_cheats 0\n");
     return true;
 }
 
@@ -742,6 +747,8 @@ bool LaunchConfiguredSession()
     gEngfuncs.pfnClientCmd(hostnameCommand.c_str());
     gEngfuncs.pfnClientCmd(passwordCommand.c_str());
     gEngfuncs.pfnClientCmd(session.lan ? "sv_lan 1\n" : "sv_lan 0\n");
+    gEngfuncs.pfnClientCmd(skillCommand);
+    gEngfuncs.pfnClientCmd(session.allowCheats ? "sv_cheats 1\n" : "sv_cheats 0\n");
     QueueMultiplayerSessionSettings(session);
     return true;
 }
