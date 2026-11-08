@@ -352,6 +352,35 @@ std::vector<BrigCampaignCatalog::Campaign> GetSelectableCampaigns(
     return campaigns;
 }
 
+bool IsSafeServerAddress(const std::string& address)
+{
+    if (address.empty() || address.size() > 64)
+        return false;
+
+    bool hasAddressCharacter = false;
+    for (unsigned char c : address)
+    {
+        const bool alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        const bool digit = c >= '0' && c <= '9';
+        const bool punctuation = c == '.' || c == '-' || c == ':' || c == '[' || c == ']';
+        if (!alpha && !digit && !punctuation)
+            return false;
+        hasAddressCharacter = hasAddressCharacter || alpha || digit;
+    }
+
+    return hasAddressCharacter;
+}
+
+bool ConnectDirectToServer(const std::string& address)
+{
+    if (!gEngfuncs.pfnClientCmd || !IsSafeServerAddress(address))
+        return false;
+
+    const std::string command = "connect " + address + "\n";
+    gEngfuncs.pfnClientCmd(command.c_str());
+    return true;
+}
+
 bool IsSafeConsoleValue(const std::string& value, std::size_t maxLength, bool allowEmpty)
 {
     if ((!allowEmpty && value.empty()) || value.size() > maxLength)
@@ -485,6 +514,46 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
     m_pBody->setFgColor(210, 210, 196, 255);
     m_pBody->setBgColor(0, 0, 0, 0);
 
+    m_pServerNameLabel = new Label("", 0, 0, 90, 24);
+    m_pServerNameLabel->setParent(this);
+    m_pServerNameLabel->setFont(Scheme::sf_primary2);
+    m_pServerNameLabel->setFgColor(210, 210, 196, 255);
+    m_pServerNameLabel->setContentAlignment(Label::a_west);
+
+    m_pServerNameEntry = new TextEntry("", 0, 0, 100, 26);
+    m_pServerNameEntry->setParent(this);
+    m_pServerNameEntry->setFont(Scheme::sf_primary2);
+    m_pServerNameEntry->setFgColor(230, 230, 220, 255);
+    m_pServerNameEntry->setBgColor(25, 25, 25, 255);
+    m_pServerNameEntry->setVisible(false);
+
+    m_pPasswordLabel = new Label("", 0, 0, 90, 24);
+    m_pPasswordLabel->setParent(this);
+    m_pPasswordLabel->setFont(Scheme::sf_primary2);
+    m_pPasswordLabel->setFgColor(210, 210, 196, 255);
+    m_pPasswordLabel->setContentAlignment(Label::a_west);
+
+    m_pPasswordEntry = new TextEntry("", 0, 0, 100, 26);
+    m_pPasswordEntry->setParent(this);
+    m_pPasswordEntry->setFont(Scheme::sf_primary2);
+    m_pPasswordEntry->setFgColor(230, 230, 220, 255);
+    m_pPasswordEntry->setBgColor(25, 25, 25, 255);
+    m_pPasswordEntry->setTextHidden(true);
+    m_pPasswordEntry->setVisible(false);
+
+    m_pServerAddressLabel = new Label("", 0, 0, 120, 24);
+    m_pServerAddressLabel->setParent(this);
+    m_pServerAddressLabel->setFont(Scheme::sf_primary2);
+    m_pServerAddressLabel->setFgColor(210, 210, 196, 255);
+    m_pServerAddressLabel->setContentAlignment(Label::a_west);
+
+    m_pServerAddressEntry = new TextEntry("", 0, 0, 100, 26);
+    m_pServerAddressEntry->setParent(this);
+    m_pServerAddressEntry->setFont(Scheme::sf_primary2);
+    m_pServerAddressEntry->setFgColor(230, 230, 220, 255);
+    m_pServerAddressEntry->setBgColor(25, 25, 25, 255);
+    m_pServerAddressEntry->setVisible(false);
+
     m_pFootnote = new Label("", 0, 0, 480, 20);
     m_pFootnote->setParent(this);
     m_pFootnote->setFont(Scheme::sf_primary2);
@@ -577,6 +646,19 @@ void CBrigMainMenuPanel::LayoutControls()
     m_pTitle->setBounds(panelX + inset, panelY + YRES(18), contentWidth, YRES(30));
     m_pBody->setBounds(panelX + inset, panelY + YRES(72), contentWidth, YRES(82));
 
+    const int labelWidth = XRES(100);
+    const int fieldX = panelX + inset + labelWidth;
+    const int fieldWidth = std::max(80, contentWidth - labelWidth);
+    const int fieldHeight = std::max(22, static_cast<int>(YRES(26)));
+    const int firstFieldY = panelY + YRES(76);
+    const int secondFieldY = panelY + YRES(114);
+    m_pServerNameLabel->setBounds(panelX + inset, firstFieldY, labelWidth - XRES(6), fieldHeight);
+    m_pServerNameEntry->setBounds(fieldX, firstFieldY, fieldWidth, fieldHeight);
+    m_pPasswordLabel->setBounds(panelX + inset, secondFieldY, labelWidth - XRES(6), fieldHeight);
+    m_pPasswordEntry->setBounds(fieldX, secondFieldY, fieldWidth, fieldHeight);
+    m_pServerAddressLabel->setBounds(panelX + inset, panelY + YRES(96), labelWidth - XRES(6), fieldHeight);
+    m_pServerAddressEntry->setBounds(fieldX, panelY + YRES(96), fieldWidth, fieldHeight);
+
     const int buttonHeight = std::max(22, static_cast<int>(YRES(29)));
     const int buttonGap = std::max(3, static_cast<int>(YRES(5)));
     const int buttonTop = panelY + YRES(164);
@@ -661,6 +743,13 @@ void CBrigMainMenuPanel::RenderPage()
     using BrigMenuNavigation::Page;
 
     HideButtons();
+    m_pBody->setVisible(true);
+    m_pServerNameLabel->setVisible(false);
+    m_pServerNameEntry->setVisible(false);
+    m_pPasswordLabel->setVisible(false);
+    m_pPasswordEntry->setVisible(false);
+    m_pServerAddressLabel->setVisible(false);
+    m_pServerAddressEntry->setVisible(false);
     bool pageHasOwnBackButton = false;
 
     switch (m_navigation.CurrentPage())
@@ -876,8 +965,23 @@ void CBrigMainMenuPanel::RenderPage()
     case Page::CreateGame:
     {
         m_pTitle->setText(MenuText("BRIG_Menu_CreateGameTitle", "CREATE GAME").c_str());
-        m_pBody->setText(BuildCreateGameText().c_str());
-        const auto& session = BrigSession::GetActiveSessionConfiguration();
+        m_pBody->setVisible(false);
+        m_pServerNameLabel->setText(MenuText("BRIG_Menu_ServerName", "Server name").c_str());
+        m_pPasswordLabel->setText(MenuText("BRIG_Menu_Password", "Password").c_str());
+        m_pServerNameLabel->setVisible(true);
+        m_pServerNameEntry->setVisible(true);
+        m_pPasswordLabel->setVisible(true);
+        m_pPasswordEntry->setVisible(true);
+
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        if (!m_bServerEntriesInitialized)
+        {
+            const std::string initialName = session.serverName.substr(0, 48);
+            const std::string initialPassword = session.password.substr(0, 32);
+            m_pServerNameEntry->setText(initialName.c_str(), static_cast<int>(initialName.size()));
+            m_pPasswordEntry->setText(initialPassword.c_str(), static_cast<int>(initialPassword.size()));
+            m_bServerEntriesInitialized = true;
+        }
         SetCommandButton(0, ButtonCommand::CycleGameMode,
             std::string(MenuText("BRIG_Menu_Mode", "Mode")) + ": " +
                 MenuText(ModeToken(session.mode), ModeFallback(session.mode)));
@@ -1012,10 +1116,23 @@ void CBrigMainMenuPanel::RenderPage()
         break;
 
     case Page::ConnectServer:
+    {
         m_pTitle->setText(MenuText("BRIG_Menu_ConnectServerTitle", "CONNECT TO SERVER").c_str());
-        m_pBody->setText(BuildUnavailableText("BRIG_Menu_ConnectPending",
-            "Server connection UI will be connected in a later stage.").c_str());
+        m_pBody->setVisible(false);
+        m_pServerAddressLabel->setText(MenuText("BRIG_Menu_ServerAddress", "Server address").c_str());
+        m_pServerAddressLabel->setVisible(true);
+        m_pServerAddressEntry->setVisible(true);
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        if (!m_bServerAddressInitialized)
+        {
+            m_pServerAddressEntry->setText(
+                session.serverAddress.c_str(), static_cast<int>(session.serverAddress.size()));
+            m_bServerAddressInitialized = true;
+        }
+        SetCommandButton(0, ButtonCommand::ConnectToServer,
+            MenuText("BRIG_Menu_Connect", "Connect"));
         break;
+    }
 
     }
 
@@ -1203,10 +1320,36 @@ void CBrigMainMenuPanel::HandleKeyInput(bool down, int keynum)
     }
 }
 
+void CBrigMainMenuPanel::CapturePageInputs()
+{
+    auto& session = BrigSession::GetActiveSessionConfiguration();
+
+    if (m_navigation.CurrentPage() == BrigMenuNavigation::Page::CreateGame)
+    {
+        char serverName[64] = {};
+        char password[48] = {};
+        m_pServerNameEntry->getText(0, serverName, sizeof(serverName));
+        m_pPasswordEntry->getText(0, password, sizeof(password));
+        serverName[sizeof(serverName) - 1] = '\0';
+        password[sizeof(password) - 1] = '\0';
+        session.serverName = serverName;
+        session.password = password;
+    }
+    else if (m_navigation.CurrentPage() == BrigMenuNavigation::Page::ConnectServer)
+    {
+        char address[80] = {};
+        m_pServerAddressEntry->getText(0, address, sizeof(address));
+        address[sizeof(address) - 1] = '\0';
+        session.serverAddress = address;
+    }
+}
+
 void CBrigMainMenuPanel::ActivateButton(int slot)
 {
     if (slot < 0 || slot >= m_iButtonCount)
         return;
+
+    CapturePageInputs();
 
     if (slot == m_iBackButtonSlot)
     {
@@ -1316,6 +1459,21 @@ void CBrigMainMenuPanel::ActivateAction(const ButtonAction& action)
         auto& session = BrigSession::GetActiveSessionConfiguration();
         session.allowSpectators = !session.allowSpectators;
         RenderPage();
+        return;
+    }
+    case ButtonCommand::ConnectToServer:
+    {
+        const auto& session = BrigSession::GetActiveSessionConfiguration();
+        if (ConnectDirectToServer(session.serverAddress))
+        {
+            if (gViewPort)
+                gViewPort->HideTopMenu();
+        }
+        else
+        {
+            m_pFootnote->setText(MenuText("BRIG_Menu_ConnectRejected",
+                "Enter a valid server address, optionally followed by :port.").c_str());
+        }
         return;
     }
     case ButtonCommand::CycleGameMode:
