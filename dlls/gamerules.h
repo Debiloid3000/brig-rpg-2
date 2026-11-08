@@ -376,7 +376,6 @@ public:
     bool IsDeathmatch() override { return false; }
     bool IsCoOp() override { return true; }
 
-    bool FAllowFlashlight() override { return true; }
     bool FAllowMonsters() override { return true; }
 
     bool FPlayerCanTakeDamage(CBasePlayer* pPlayer, CBaseEntity* pAttacker) override;
