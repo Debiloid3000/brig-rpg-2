@@ -1512,7 +1512,7 @@ void CChangeLevel::ChangeLevelNow(CBaseEntity* pActivator)
 
 	if (FNullEnt(pPlayer) || !InTransitionVolume(pPlayer, m_szLandmarkName))
 	{
-		ALERT(at_aiconsole, "Player isn\x27t in the transition volume %s, aborting\\n", m_szLandmarkName);
+		ALERT(at_aiconsole, "Player isn't in the transition volume %s, aborting\n", m_szLandmarkName);
 		return;
 	}
 
