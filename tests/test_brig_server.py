@@ -130,6 +130,8 @@ class BrigDedicatedServerTests(unittest.TestCase):
     def test_non_goldsrc_bsp_is_rejected(self):
         (self.mod / "maps" / "badmap.bsp").write_bytes(b"\x1d\x00\x00\x00" + bytes(124))
         (self.mod / "maps" / "badmap.cfg").write_text("brig_coop 1\n", encoding="utf-8")
+        manifest = self.mod / "maps" / "brig_maplist.txt"
+        manifest.write_text(manifest.read_text(encoding="utf-8") + "badmap\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "not a GoldSrc BSP"):
             build_command(self.hlds, self.mod, map_name="badmap")
 
