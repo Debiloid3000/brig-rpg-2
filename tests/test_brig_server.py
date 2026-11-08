@@ -45,6 +45,9 @@ class BrigDedicatedServerTests(unittest.TestCase):
         self.assertEqual(command[command.index("+map") + 1], "c0a0")
         self.assertLess(command.index("+coop"), command.index("+map"))
         self.assertGreater(command.index("+hostname", command.index("+map")), command.index("+map"))
+        self.assertEqual(command[command.index("+mp_timelimit") + 1], "20")
+        self.assertEqual(command[command.index("+mp_fraglimit") + 1], "0")
+        self.assertEqual(command[command.index("+mp_allowmonsters") + 1], "1")
 
     def test_deathmatch_and_team_deathmatch_require_matching_map_flags(self):
         dm, _ = build_command(self.hlds, self.mod, map_name="crossfire", mode="deathmatch")
@@ -62,6 +65,41 @@ class BrigDedicatedServerTests(unittest.TestCase):
         self.assertIn("team pass", command)
         self.assertEqual(command[command.index("+sv_lan") + 1], "0")
         self.assertEqual(command[command.index("+sv_lan", command.index("+map")) + 1], "0")
+
+    def test_session_settings_are_applied_before_and_after_map(self):
+        command, _ = build_command(
+            self.hlds,
+            self.mod,
+            map_name="crossfire",
+            mode="deathmatch",
+            time_limit_minutes=45,
+            frag_limit=50,
+            friendly_fire=True,
+            fall_damage=True,
+            weapon_stay=True,
+            flashlight=False,
+            allow_monsters=True,
+            allow_spectators=True,
+        )
+        map_index = command.index("+map")
+        for name, value in (
+            ("+mp_timelimit", "45"),
+            ("+mp_fraglimit", "50"),
+            ("+mp_friendlyfire", "1"),
+            ("+mp_falldamage", "1"),
+            ("+mp_weaponstay", "1"),
+            ("+mp_flashlight", "0"),
+            ("+mp_allowmonsters", "1"),
+            ("+allow_spectators", "1"),
+        ):
+            self.assertEqual(command[command.index(name) + 1], value)
+            self.assertEqual(command[command.index(name, map_index) + 1], value)
+
+    def test_invalid_session_limits_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "time_limit_minutes"):
+            build_command(self.hlds, self.mod, time_limit_minutes=121)
+        with self.assertRaisesRegex(ValueError, "frag_limit"):
+            build_command(self.hlds, self.mod, frag_limit=1001)
 
     def test_unregistered_or_unsupported_map_mode_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "not enabled for coop"):

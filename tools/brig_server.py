@@ -58,6 +58,14 @@ def build_command(
     hostname: str = "BRIG RPG 2",
     password: str = "",
     lan: bool = True,
+    time_limit_minutes: int = 20,
+    frag_limit: int = 0,
+    friendly_fire: bool = False,
+    fall_damage: bool = False,
+    weapon_stay: bool = False,
+    flashlight: bool = True,
+    allow_monsters: bool = False,
+    allow_spectators: bool = False,
 ) -> tuple[list[str], Path]:
     """Validate a BRIG dedicated-server install and return (argv, working_directory)."""
     if mode not in SUPPORTED_MODES:
@@ -68,6 +76,10 @@ def build_command(
         raise ValueError("max_players must be between 2 and 32")
     if not 1 <= port <= 65535:
         raise ValueError("port must be between 1 and 65535")
+    if not 0 <= time_limit_minutes <= 120:
+        raise ValueError("time_limit_minutes must be between 0 and 120")
+    if not 0 <= frag_limit <= 1000:
+        raise ValueError("frag_limit must be between 0 and 1000")
 
     hostname = _safe_console_value("hostname", hostname, 48, False)
     password = _safe_console_value("password", password, 32, True)
@@ -110,6 +122,16 @@ def build_command(
     coop = "1" if mode == "coop" else "0"
     teamplay = "1" if mode == "team_deathmatch" else "0"
     lan_value = "1" if lan else "0"
+    session_cvars = [
+        ("+mp_timelimit", str(time_limit_minutes)),
+        ("+mp_fraglimit", str(frag_limit)),
+        ("+mp_friendlyfire", "1" if friendly_fire else "0"),
+        ("+mp_falldamage", "1" if fall_damage else "0"),
+        ("+mp_weaponstay", "1" if weapon_stay else "0"),
+        ("+mp_flashlight", "1" if flashlight else "0"),
+        ("+mp_allowmonsters", "1" if (allow_monsters or mode == "coop") else "0"),
+        ("+allow_spectators", "1" if allow_spectators else "0"),
+    ]
 
     # Mode and maxplayers must be established before +map so InstallGameRules()
     # sees the correct gpGlobals values when the BSP starts. Hostname/password/
@@ -126,11 +148,13 @@ def build_command(
         "+sv_lan", lan_value,
         "+hostname", hostname,
         "+sv_password", password,
-        "+map", normalized_map,
-        "+hostname", hostname,
-        "+sv_lan", lan_value,
-        "+sv_password", password,
     ]
+    for key, value in session_cvars:
+        command.extend((key, value))
+    command.extend(("+map", normalized_map))
+    command.extend(("+hostname", hostname, "+sv_lan", lan_value, "+sv_password", password))
+    for key, value in session_cvars:
+        command.extend((key, value))
     return command, executable.parent
 
 
@@ -162,6 +186,14 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=27015)
     parser.add_argument("--hostname", default="BRIG RPG 2")
     parser.add_argument("--password", default="")
+    parser.add_argument("--time-limit", type=int, default=20, help="minutes; 0 disables the time limit")
+    parser.add_argument("--frag-limit", type=int, default=0, help="frags; 0 disables the frag limit")
+    parser.add_argument("--friendly-fire", action="store_true")
+    parser.add_argument("--fall-damage", action="store_true")
+    parser.add_argument("--weapon-stay", action="store_true")
+    parser.add_argument("--no-flashlight", action="store_true")
+    parser.add_argument("--allow-monsters", action="store_true", help="used by DeathMatch/TDM; Co-op always permits campaign monsters")
+    parser.add_argument("--allow-spectators", action="store_true")
     parser.add_argument("--internet", action="store_true", help="disable LAN-only mode; LAN is the safe default")
     parser.add_argument("--dry-run", action="store_true", help="validate the install and print the exact command")
     return parser
@@ -181,6 +213,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             hostname=args.hostname,
             password=args.password,
             lan=not args.internet,
+            time_limit_minutes=args.time_limit,
+            frag_limit=args.frag_limit,
+            friendly_fire=args.friendly_fire,
+            fall_damage=args.fall_damage,
+            weapon_stay=args.weapon_stay,
+            flashlight=not args.no_flashlight,
+            allow_monsters=args.allow_monsters,
+            allow_spectators=args.allow_spectators,
         )
     except (OSError, ValueError) as error:
         parser.error(str(error))

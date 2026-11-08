@@ -28,9 +28,9 @@ From the repository root:
 py tools/brig_server.py --hlds "D:\HLDS\\hlds.exe" --mod-dir "D:\HLDS\\brig" --mode coop --map c0a0 --max-players 8 --port 27015
 ```
 
-LAN-only is the default. Add --internet only when the server should accept non-LAN traffic. Add --password for a password-protected server. Use --dry-run to validate paths and print the exact arguments without starting HLDS.
+LAN-only is the default. Add --internet only when the server should accept non-LAN traffic. Add --password for a password-protected server. Use --time-limit and --frag-limit for match limits, and --friendly-fire, --fall-damage, --weapon-stay, --no-flashlight and --allow-spectators for the corresponding server rules. Use --allow-monsters for DeathMatch/TDM; Co-op always permits campaign monsters. Use --dry-run to validate paths and print the exact arguments without starting HLDS.
 
-The launcher validates the executable/mod layout, liblist.gam, the server DLL, BSP v30, and the selected mode flag in the map CFG. Hostname and password are passed as separate process arguments and console delimiters are rejected. The server runs as a separate HLDS process in its own console; Ctrl+C requests shutdown, with a process termination fallback if HLDS does not exit.
+The launcher validates the executable/mod layout, liblist.gam, the server DLL, BSP v30, and the selected mode flag in the map CFG. It exposes the same time/frag limits, friendly fire, fall damage, weapon stay, flashlight, monster and spectator settings used by Create Game. The cvars are applied before and after the map starts so server.cfg defaults do not silently replace the selected session settings. Co-op always permits campaign monsters; the allow-monsters switch applies to DeathMatch/TDM. Hostname and password are passed as separate process arguments and console delimiters are rejected. The server runs as a separate HLDS process in its own console; Ctrl+C requests shutdown, with a process termination fallback if HLDS does not exit.
 
 The launcher is an initial dedicated-process start/foreground-stop path. It does not yet provide a VGUI process manager, remote console, restart scheduler, Steam Lobby, or automated public-server listing. Those remain distinct from Create Game's listen-server flow and the existing LAN Server Browser.
 
