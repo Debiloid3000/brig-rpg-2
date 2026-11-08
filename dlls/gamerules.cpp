@@ -373,6 +373,14 @@ CGameRules* InstallGameRules()
 	SERVER_COMMAND("exec game.cfg\n");
 	SERVER_EXECUTE();
 
+	// The engine can expose Co-op while deathmatch is disabled. Resolve it
+	// before the Singleplayer branch so info_player_coop spawn selection is used.
+	if (gpGlobals->coop != 0)
+	{
+		g_teamplay = false;
+		return new CHalfLifeCoOp;
+	}
+
 	if (0 == gpGlobals->deathmatch)
 	{
 		// generic half-life

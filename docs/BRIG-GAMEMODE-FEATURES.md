@@ -15,10 +15,12 @@
 
 BRIG already has `CGameRules`, `CHalfLifeRules`, `CHalfLifeMultiplay` and `CHalfLifeTeamplay`. It also exposes `IsCoOp()`, `IsDeathmatch()` and `IsTeamplay()`.
 
-Two important facts affect future work:
+The mode path has an initial Co-op implementation, but it is deliberately not marked gameplay-ready yet:
 
-1. `CHalfLifeMultiplay::IsCoOp()` reads `gpGlobals->coop`, while `CHalfLifeMultiplay::IsDeathmatch()` currently returns `true` unconditionally. Any common mode resolver must test Co-op before Deathmatch.
-2. `InstallGameRules()` currently chooses Singleplayer when `gpGlobals->deathmatch == 0`; otherwise it chooses Teamplay or the generic Multiplayer rules. There is no dedicated Co-op rules class yet. A future complete Co-op implementation must address mode selection, friendly-fire policy, spawn selection, NPC allowance and respawn together rather than relying on the Co-op predicate alone.
+1. The generic `CHalfLifeMultiplay::IsCoOp()` reads `gpGlobals->coop`, while the generic `CHalfLifeMultiplay::IsDeathmatch()` still returns `true` unconditionally. The dedicated `CHalfLifeCoOp` rules class reports Co-op and explicitly reports that it is not Deathmatch; the common resolver still checks Co-op first for compatibility with any legacy base-class path.
+2. `InstallGameRules()` now checks `gpGlobals->coop` before the Singleplayer/Deathmatch branch and installs `CHalfLifeCoOp`. That class reuses multiplayer connection, HUD and immediate-respawn infrastructure, but restores the Singleplayer skill profile, allows monsters/flashlight, blocks damage from other players, treats players as allies and awards no player-kill frags. The existing `EntSelectSpawnPoint()` Co-op path now becomes reachable: it tries `info_player_coop` and falls back to `info_player_start`.
+
+This is a gameplay-rules foundation, not a claim that the entire Co-op experience is finished. Inventory persistence, transition/save behavior, map-specific scripted AI, and in-game Steam Legacy verification remain open. The shared mode registry therefore continues to reject Co-op launches from the menu.
 
 ## Central mode feature registry
 
@@ -31,11 +33,17 @@ Implemented in `dlls/gamemode_features.h`:
 | Deathmatch | Yes | Yes | No | Yes | No |
 | Team Deathmatch | Yes | Yes | Yes | Yes | No |
 
-The resolver deliberately checks `IsCoOp()` first. The table is the shared feature contract for mode-specific code; it does **not** claim that every row is fully implemented by the existing game rules. At present, the Barnacle input lock is the only new gameplay behavior wired to this registry. The current game-rules hierarchy still needs a dedicated, fully tested Co-op implementation before the other Co-op entries can be treated as active rules.
+The resolver deliberately checks `IsCoOp()` first. The table is the shared feature contract for mode-specific code; it does **not** claim that every row is fully implemented by the existing game rules. The dedicated Co-op rules now wire the basic friendly-fire, relationship, monster, flashlight, skill-profile and respawn-selection behavior described above. The Barnacle input lock continues to use the same registry. Co-op remains gated in `game_mode_registry.h` until inventory/transition behavior, NPC/scripted-map compatibility and Steam Legacy runtime tests are complete.
 
 ### Implemented Co-op-specific behavior
 
-When the active game-rules object reports Co-op and the player has `PFLAG_ONBARNACLE`, BRIG skips the player's item pre-frame and post-frame processing. This prevents the captured player from using their held item against the Barnacle. It does not alter Singleplayer, Deathmatch or Team Deathmatch. Existing release handling clears the flag when the Barnacle is killed; player spawn also resets the physics flags.
+- `InstallGameRules()` selects `CHalfLifeCoOp` whenever the engine's `coop` global is enabled, before the Singleplayer and Deathmatch branches.
+- `CHalfLifeCoOp` is multiplayer for connection/HUD/respawn purposes, but is not Deathmatch. It uses the normal Singleplayer skill values, allows campaign monsters and the flashlight, and awards zero frag points for player kills.
+- Damage from another player is rejected; self-damage and damage from monsters/world entities retain the base behavior. Player-to-player relationship queries return `GR_TEAMMATE`.
+- The existing `EntSelectSpawnPoint()` logic is now activated by the Co-op rules: it searches `info_player_coop` first and falls back to `info_player_start` when a map has no dedicated Co-op spawn.
+- When a Co-op player is captured by a Barnacle and has `PFLAG_ONBARNACLE`, BRIG skips item pre-frame and post-frame processing so the captured player cannot use their held item. Existing release handling clears the flag when the Barnacle is killed; player spawn also resets the physics flags.
+
+This does not yet preserve the full inventory across player death or map transitions, validate every scripted NPC relationship, or prove that all campaign maps behave correctly in Co-op.
 
 ### Implemented general Half-Life bug fix
 
@@ -48,9 +56,9 @@ When the active game-rules object reports Co-op and the player has `PFLAG_ONBARN
 | Barnacle victim resurrection fix | Half-Life Updated, `dlls/monsters.cpp` | All modes | Game-DLL-only; no engine ABI change | **Applied** |
 | Prevent captured Co-op player item input | BRIG mode registry + existing `PFLAG_ONBARNACLE` | Co-op only | Game-DLL-only; release flag remains the existing mechanism | **Applied; needs runtime test** |
 | Original Barnacle entity logic | BRIG `dlls/barnacle.cpp` | Singleplayer baseline; shared NPC | BRIG's file is byte-identical to Half-Life Updated at the inspected revision | **Kept; no unnecessary replacement** |
-| Co-op spawn-point selection (`info_player_coop`) | Half-Life Updated / Unified SDK | Co-op | Game-DLL implementation is possible; must keep fallback behavior for old maps | Deferred |
-| Co-op friendly fire and player relationships | Unified SDK Co-op rules as behavioral reference | Co-op | Game-DLL implementation is possible | Deferred; no dedicated Co-op rules class |
-| Co-op respawn and inventory persistence | Unified SDK Co-op rules / persistent inventory | Co-op | Respawn can be game-DLL logic; persistent map-transition inventory needs careful save/transition design | Deferred |
+| Co-op spawn-point selection (`info_player_coop`) | Existing Legacy player spawn selector | Co-op | Reuses the original Game-DLL selector; tries `info_player_coop`, then `info_player_start` | **Applied; needs runtime test** |
+| Co-op friendly fire and player relationships | BRIG `CHalfLifeCoOp` rules | Co-op | Game-DLL rule overrides; no engine API change | **Applied; needs runtime test** |
+| Co-op respawn and inventory persistence | Existing multiplayer respawn + future save/transition work | Co-op | Immediate respawn is inherited from multiplayer rules; inventory/transition persistence still requires explicit design | **Partial; inventory persistence deferred** |
 | NPC classifications, allied behavior and scripted AI | Unified SDK / Sven Co-op documentation | Co-op where appropriate; otherwise all modes | Individual NPC/AI changes may be portable; blanket replacement risks changing map scripts | Audit per entity |
 | Weapon, item and ammo respawn | Existing BRIG multiplayer rules; Unified SDK configurable rules | DM/TDM; selected Co-op maps only | Game-DLL logic | Existing multiplayer baseline; not generalized yet |
 | Team relationships and friendly fire | BRIG `CHalfLifeTeamplay`; Unified SDK teamplay | TDM | Game-DLL logic | Existing TDM baseline; keep separate from Co-op |
@@ -109,7 +117,7 @@ The repository CI is the validation path for this change:
 - Linux-x86 compile checks and Legacy client/server API bounds tests.
 - Existing Python tests, asset policy validation and packaging checks.
 
-This branch has not been tested inside a running Steam Legacy game in this change. In particular, verify: Singleplayer Barnacle capture remains unchanged; Co-op capture blocks the caught player's item input; killing a Barnacle releases a living player; death followed by respawn clears the capture flag; an NPC killed while captured does not return to the idle state; existing BSPs without `info_player_coop` continue to load. Do not mark the full Co-op mode complete until these tests and dedicated Co-op gamerules/spawn behavior are implemented.
+This branch has not been tested inside a running Steam Legacy game in this change. In particular, verify: Singleplayer Barnacle capture remains unchanged; Co-op rules are selected when `coop` is enabled even if `deathmatch` is zero; player-vs-player damage is blocked; monsters and flashlights remain enabled; players are reported as allies; `info_player_coop` is preferred and maps without it fall back to `info_player_start`; captured players cannot use held items; respawn clears the Barnacle flag; inventory and map transitions do not lose or duplicate items; NPCs and scripted map events behave correctly. Do not mark the full Co-op mode complete until these tests pass inside Steam Legacy and the remaining inventory/AI work is finished.
 
 
 ## Map catalog dependency

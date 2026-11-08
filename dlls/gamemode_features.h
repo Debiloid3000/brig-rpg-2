@@ -4,8 +4,8 @@
 #include "../game_shared/map_catalog.h"
 
 // Central mode identification for BRIG's existing CGameRules hierarchy.
-// Check Co-op before Deathmatch: CHalfLifeMultiplay::IsDeathmatch() currently
-// returns true even when its IsCoOp() reports that the coop cvar is enabled.
+// Check Co-op before Deathmatch for compatibility with the generic
+// CHalfLifeMultiplay base, which still reports IsDeathmatch() unconditionally.
 using BrigGameMode = BrigMapCatalog::GameMode;
 
 struct BrigGameModeFeatures

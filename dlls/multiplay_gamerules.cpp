@@ -1058,6 +1058,42 @@ bool CHalfLifeMultiplay::FAllowMonsters()
 	return (allowmonsters.value != 0);
 }
 
+CHalfLifeCoOp::CHalfLifeCoOp()
+{
+	// Keep the campaign's Singleplayer skill profile while reusing the
+	// multiplayer connection, HUD and respawn infrastructure.
+	g_teamplay = false;
+	RefreshSkillData();
+}
+
+void CHalfLifeCoOp::RefreshSkillData()
+{
+	CGameRules::RefreshSkillData();
+}
+
+bool CHalfLifeCoOp::FPlayerCanTakeDamage(CBasePlayer* pPlayer, CBaseEntity* pAttacker)
+{
+	if (pAttacker && pAttacker != pPlayer && pAttacker->IsPlayer())
+		return false;
+
+	return CHalfLifeMultiplay::FPlayerCanTakeDamage(pPlayer, pAttacker);
+}
+
+int CHalfLifeCoOp::IPointsForKill(CBasePlayer*, CBasePlayer*)
+{
+	// Co-op is objective/progression focused; player kills award no frag points.
+	return 0;
+}
+
+int CHalfLifeCoOp::PlayerRelationship(CBaseEntity* pPlayer, CBaseEntity* pTarget)
+{
+	if (pPlayer && pTarget && pPlayer->IsPlayer() && pTarget->IsPlayer())
+		return GR_TEAMMATE;
+
+	return CHalfLifeMultiplay::PlayerRelationship(pPlayer, pTarget);
+}
+
+
 //=========================================================
 //======== CHalfLifeMultiplay private functions ===========
 #define INTERMISSION_TIME 6
