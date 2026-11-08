@@ -20,10 +20,10 @@ inline const Descriptor& GetDescriptor(BrigMapCatalog::GameMode mode)
     static const Descriptor singlePlayer{
         BrigMapCatalog::GameMode::SinglePlayer, "singleplayer", true, "BRIG_Mode_Ready"};
     static const Descriptor coop{
-        BrigMapCatalog::GameMode::CoOp, "coop", false, "BRIG_Mode_Coop_Incomplete"};
-    // BRIG already has the original Half-Life multiplayer and teamplay rules.
-    // Create Game now configures them and validates maps through the shared catalog.
-    // Co-op remains gated until its NPC/scripted-map and Legacy runtime audit is done.
+        BrigMapCatalog::GameMode::CoOp, "coop", true, "BRIG_Mode_Ready"};
+    // Co-op uses the existing Legacy multiplayer connection path and dedicated rules.
+    // NPC and scripted entities retain their map-authored behavior; runtime validation
+    // remains required before the mode can be called fully verified.
     static const Descriptor deathmatch{
         BrigMapCatalog::GameMode::Deathmatch, "deathmatch", true, "BRIG_Mode_Ready"};
     static const Descriptor teamDeathmatch{
@@ -73,10 +73,9 @@ inline bool CanLaunchMap(
         if (!BrigMapCatalog::IsModeAllowed(map, mode))
             return false;
 
-        // The expansion category is metadata-only until its campaign assets,
-        // entities and runtime behavior have been audited and implemented.
-        return mode != BrigMapCatalog::GameMode::SinglePlayer ||
-            !IsUnsupportedExpansion(map);
+        // Blue Shift and Opposing Force stay unavailable until their assets,
+        // entities and runtime behavior are intentionally integrated.
+        return !IsUnsupportedExpansion(map);
     }
 
     return false;

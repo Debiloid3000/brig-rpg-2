@@ -27,6 +27,7 @@
 #include "saverestore.h"
 #include "trains.h" // trigger_camera has train functionality
 #include "gamerules.h"
+#include "game.h"
 
 #define SF_TRIGGER_PUSH_START_OFF 2		   //spawnflag that makes trigger_push spawn turned OFF
 #define SF_TRIGGER_HURT_TARGETONCE 1	   // Only fire hurt target once
@@ -1484,6 +1485,15 @@ void CChangeLevel::ChangeLevelNow(CBaseEntity* pActivator)
 	if (g_pGameRules->IsDeathmatch())
 		return;
 
+	// A Co-op transition must not point to an absent, unregistered, or
+	// non-Co-op BSP. Singleplayer keeps the original unrestricted Legacy path.
+	if (g_pGameRules->IsCoOp() && !MapCatalog_IsAllowedForCoOp(m_szMapName))
+	{
+		ALERT(at_console, "Co-op changelevel refused: destination %s is not registered for Co-op.\n",
+			m_szMapName);
+		return;
+	}
+
 	// Some people are firing these multiple times in a frame, disable
 	if (gpGlobals->time == pev->dmgtime)
 		return;
@@ -1491,10 +1501,18 @@ void CChangeLevel::ChangeLevelNow(CBaseEntity* pActivator)
 	pev->dmgtime = gpGlobals->time;
 
 
-	CBaseEntity* pPlayer = UTIL_GetLocalPlayer();
-	if (!InTransitionVolume(pPlayer, m_szLandmarkName))
+	// Classic Singleplayer checks the local player. In Co-op, the touch/use
+	// activator is authoritative: a remote client may have touched the trigger,
+	// and a dedicated server has no listen-server local player to query.
+	CBaseEntity* pPlayer = nullptr;
+	if (g_pGameRules->IsCoOp() && pActivator && pActivator->IsPlayer())
+		pPlayer = pActivator;
+	else
+		pPlayer = UTIL_GetLocalPlayer();
+
+	if (FNullEnt(pPlayer) || !InTransitionVolume(pPlayer, m_szLandmarkName))
 	{
-		ALERT(at_aiconsole, "Player isn't in the transition volume %s, aborting\n", m_szLandmarkName);
+		ALERT(at_aiconsole, "Player isn\x27t in the transition volume %s, aborting\\n", m_szLandmarkName);
 		return;
 	}
 

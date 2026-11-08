@@ -23,6 +23,7 @@ void MapCatalog_Print();
 int MapCatalog_GetAvailableMapCount();
 const char* MapCatalog_GetAvailableMapName(int index);
 bool MapCatalog_IsAllowedForMultiplayer(const char* mapName, bool teamDeathmatch);
+bool MapCatalog_IsAllowedForCoOp(const char* mapName);
 
 void MapProfiles_Clear();
 void MapProfiles_LoadForCurrentMap();

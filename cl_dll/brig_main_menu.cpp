@@ -687,7 +687,9 @@ bool LaunchConfiguredSession()
     if (session.mode == BrigMapCatalog::GameMode::SinglePlayer)
         return LaunchSingleplayerMap(session.mapId);
 
-    if (session.mode != BrigMapCatalog::GameMode::Deathmatch &&
+    const bool coop = session.mode == BrigMapCatalog::GameMode::CoOp;
+    if (!coop &&
+        session.mode != BrigMapCatalog::GameMode::Deathmatch &&
         session.mode != BrigMapCatalog::GameMode::TeamDeathmatch)
         return false;
 
@@ -713,8 +715,8 @@ bool LaunchConfiguredSession()
     char command[96];
     std::snprintf(command, sizeof(command), "maxplayers %d\n", session.maxPlayers);
     gEngfuncs.pfnClientCmd(command);
-    gEngfuncs.pfnClientCmd("deathmatch 1\n");
-    gEngfuncs.pfnClientCmd("coop 0\n");
+    gEngfuncs.pfnClientCmd(coop ? "deathmatch 0\n" : "deathmatch 1\n");
+    gEngfuncs.pfnClientCmd(coop ? "coop 1\n" : "coop 0\n");
     gEngfuncs.pfnClientCmd(session.mode == BrigMapCatalog::GameMode::TeamDeathmatch
         ? "mp_teamplay 1\n" : "mp_teamplay 0\n");
 
@@ -1904,11 +1906,13 @@ void CBrigMainMenuPanel::ActivateAction(const ButtonAction& action)
     {
         auto& session = BrigSession::GetActiveSessionConfiguration();
         using BrigMapCatalog::GameMode;
-        const GameMode modes[] = {GameMode::SinglePlayer, GameMode::Deathmatch, GameMode::TeamDeathmatch};
+        const GameMode modes[] = {
+            GameMode::SinglePlayer, GameMode::CoOp,
+            GameMode::Deathmatch, GameMode::TeamDeathmatch};
         int current = 0;
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < 4; ++i)
             if (modes[i] == session.mode) current = i;
-        session.mode = modes[(current + 1) % 3];
+        session.mode = modes[(current + 1) % 4];
         session.connectionType = session.mode == GameMode::SinglePlayer
             ? BrigSession::ConnectionType::Local : BrigSession::ConnectionType::ListenServer;
         session.maxPlayers = session.mode == GameMode::SinglePlayer ? 1 : std::max(2, session.maxPlayers);

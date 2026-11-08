@@ -369,7 +369,9 @@ class CHalfLifeCoOp : public CHalfLifeMultiplay
 public:
     CHalfLifeCoOp();
 
+    void Think() override;
     void RefreshSkillData() override;
+    bool FAllowFlashlight() override;
 
     bool IsDeathmatch() override { return false; }
     bool IsCoOp() override { return true; }

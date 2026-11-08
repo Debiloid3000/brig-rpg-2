@@ -1082,15 +1082,28 @@ CHalfLifeCoOp::CHalfLifeCoOp()
 	RefreshSkillData();
 }
 
+void CHalfLifeCoOp::Think()
+{
+	// Co-op campaign progression is controlled by trigger_changelevel.
+	// Do not let inherited DeathMatch time/frag limits enter a mapcycle or
+	// intermission while the team is progressing through a story campaign.
+	g_VoiceGameMgr.Update(gpGlobals->frametime);
+}
+
 void CHalfLifeCoOp::RefreshSkillData()
 {
 	CGameRules::RefreshSkillData();
 }
 
+bool CHalfLifeCoOp::FAllowFlashlight()
+{
+	return flashlight.value != 0;
+}
+
 bool CHalfLifeCoOp::FPlayerCanTakeDamage(CBasePlayer* pPlayer, CBaseEntity* pAttacker)
 {
 	if (pAttacker && pAttacker != pPlayer && pAttacker->IsPlayer())
-		return false;
+		return friendlyfire.value != 0;
 
 	return CHalfLifeMultiplay::FPlayerCanTakeDamage(pPlayer, pAttacker);
 }

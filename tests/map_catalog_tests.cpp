@@ -135,7 +135,7 @@ int main()
     assert(!IsModeAllowed(hazard, GameMode::Deathmatch));
     assert(BrigGameModeRegistry::CanLaunchMap(
         {hazard}, "t0a0", GameMode::SinglePlayer));
-    assert(!BrigGameModeRegistry::CanLaunchMap(
+    assert(BrigGameModeRegistry::CanLaunchMap(
         {hazard}, "t0a0", GameMode::CoOp));
 
     MapMetadata mapContinuation = map;
@@ -194,10 +194,12 @@ int main()
     // A map must pass both the mode-readiness gate and its own metadata gate.
     assert(BrigGameModeRegistry::CanLaunchMap(
         {map}, "C0A0", GameMode::SinglePlayer));
-    assert(!BrigGameModeRegistry::CanLaunchMap(
+    assert(BrigGameModeRegistry::CanLaunchMap(
         {map}, "c0a0", GameMode::CoOp));
     assert(!BrigGameModeRegistry::CanLaunchMap(
         {blueShiftMap}, "ba_canal1", GameMode::SinglePlayer));
+    assert(!BrigGameModeRegistry::CanLaunchMap(
+        {blueShiftMap}, "ba_canal1", GameMode::CoOp));
     assert(!BrigGameModeRegistry::CanLaunchMap(
         {map}, "../c0a0", GameMode::SinglePlayer));
 
@@ -217,7 +219,7 @@ int main()
     assert(trainingMaps[1].name == "t0a0a");
 
     assert(BrigGameModeRegistry::IsGameplayReady(GameMode::SinglePlayer));
-    assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::CoOp));
+    assert(BrigGameModeRegistry::IsGameplayReady(GameMode::CoOp));
     assert(BrigGameModeRegistry::IsGameplayReady(GameMode::Deathmatch));
     assert(BrigGameModeRegistry::IsGameplayReady(GameMode::TeamDeathmatch));
 

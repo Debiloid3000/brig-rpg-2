@@ -310,6 +310,18 @@ bool MapCatalog_IsAllowedForMultiplayer(const char* mapName, bool teamDeathmatch
 	return teamDeathmatch ? metadata->teamDeathmatch : metadata->deathmatch;
 }
 
+bool MapCatalog_IsAllowedForCoOp(const char* mapName)
+{
+	if (!mapName || !BrigMapCatalog::IsValidMapId(mapName))
+		return false;
+
+	if (g_mapCatalog.empty())
+		MapCatalog_Refresh();
+
+	const auto* metadata = MapCatalog_FindMap(mapName);
+	return metadata && metadata->coop;
+}
+
 static bool MapProfiles_IsValidPlayerModelName(const char* modelName)
 {
 	if (!modelName || !*modelName || strlen(modelName) >= 32)
