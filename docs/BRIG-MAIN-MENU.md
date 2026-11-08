@@ -7,11 +7,11 @@ The engine-owned main menu is described by `_folder/brig/resource/gamemenu.res`.
 - The Play and Multiplayer rows invoke `engine brig_menu_play` and `engine brig_menu_multiplayer`. Those commands are registered by the client DLL and open VGUI1 pages inside the existing `TeamFortressViewport`.
 - VGUI1 owns the BRIG page stack, mouse interaction, arrow-key selection, Enter activation and Escape/Back navigation. It does not replace or patch `hl.exe`.
 - Play contains Singleplayer, Create Game and Game. Multiplayer contains Server Browser, Lobby, Create Lobby and Connect to Server. Each navigation route is implemented; pages for unfinished gameplay/network subsystems report their status instead of pretending to launch them.
-- The Singleplayer summary is generated from `maps/brig_maplist.txt` and its per-map CFGs through `game_shared/map_catalog.h`. `game_shared/campaign_catalog.h` derives campaign groups from those map records and owns no second list.
+- Singleplayer uses `maps/brig_maplist.txt` and per-map CFGs through `game_shared/map_catalog.h`; `game_shared/campaign_catalog.h` derives categories, ordered campaigns/chapters and Training courses. The VGUI flow supports campaign selection, chapter selection, the all-campaign-maps view and paged map selection.
 - `game_shared/game_mode_registry.h` is the shared readiness registry. Co-op map eligibility does not mark Co-op gameplay complete.
-- `game_shared/session_config.h` exposes one client-side `SessionConfiguration` object. The Game page reads that object; future Create Game and Server Settings controls must update this same object instead of introducing parallel settings.
+- `game_shared/session_config.h` exposes one client-side `SessionConfiguration` object. The Singleplayer Game Settings page updates difficulty (GoldSrc skill 1–3) and the cheats preference on this object; future Create Game and Server Settings controls must reuse it.
 
-The branch provides a menu foundation, not the later campaign launcher, Create Game editor, editable server settings, server browser, or lobby/network implementation. These remain explicit next-stage integrations. Steam Legacy in-game mouse, keyboard and GameUI layering still require manual runtime verification after the Win32 client DLL is built.
+The Singleplayer campaign browser and map-launch path are implemented in code. Before a map command is sent, the client re-reads the catalog and verifies the BSP/header, map identifier, Singleplayer metadata and mode/expansion readiness. Difficulty and the cheats preference are queued before the map command; actual server-side application is not claimed until checked in Steam Legacy. Create Game editing, editable multiplayer server settings, server browser and lobby/network implementation remain unfinished. Steam Legacy mouse, keyboard, menu layering, launch, difficulty, cheats, menu return and save/restore still require manual runtime verification.
 
 
 

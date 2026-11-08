@@ -58,7 +58,7 @@ The menu consumes shared data rather than maintaining parallel lists:
 - `session_config.h` owns one client-side `SessionConfiguration` object; menu pages read it, and future settings controls must update it rather than create another copy.
 - Server Browser, Lobby, Create Lobby and Connect have real navigation routes but report their unimplemented network status until those subsystems are built.
 
-The Singleplayer page is currently a read-only summary of campaigns generated from the central map catalog. Create Game and Game pages expose the correct integration points; campaign launch, editable session/server settings, and network actions remain later stages.
+The Singleplayer VGUI path now navigates category → campaign → chapter/map, exposes a campaign-wide map list and keeps Training courses separate. Before launch, the client reloads the same central catalog and accepts only a safe map ID that resolves to an existing GoldSrc BSP v30, has Singleplayer enabled, belongs to a gameplay-ready mode, and is not tagged as an unsupported Blue Shift/Opposing Force expansion. The launch helper queues the selected GoldSrc difficulty (`skill 1`, `skill 2`, or `skill 3`) and the cheats preference before the map command. This command sequence and server-side result remain subject to manual Steam Legacy runtime validation. Create Game editing, editable multiplayer server settings and network actions remain later stages.
 
 ## Unified map catalog
 

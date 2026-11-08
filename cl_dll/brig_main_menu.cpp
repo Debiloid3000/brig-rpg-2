@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -258,6 +259,93 @@ const char* ConnectionTypeFallback(BrigSession::ConnectionType type)
         return "Local";
     }
 }
+
+const char* CampaignCategoryFallback(BrigCampaignCatalog::Category category)
+{
+    switch (category)
+    {
+    case BrigCampaignCatalog::Category::HalfLife1: return "Half-Life 1";
+    case BrigCampaignCatalog::Category::BlueShift: return "Blue Shift (not implemented)";
+    case BrigCampaignCatalog::Category::OpposingForce: return "Opposing Force (not implemented)";
+    case BrigCampaignCatalog::Category::Custom: return "Custom BRIG campaigns";
+    case BrigCampaignCatalog::Category::All:
+    default: return "All campaigns";
+    }
+}
+
+BrigCampaignCatalog::Category NextCampaignCategory(BrigCampaignCatalog::Category category)
+{
+    using BrigCampaignCatalog::Category;
+    switch (category)
+    {
+    case Category::All: return Category::HalfLife1;
+    case Category::HalfLife1: return Category::BlueShift;
+    case Category::BlueShift: return Category::OpposingForce;
+    case Category::OpposingForce: return Category::Custom;
+    case Category::Custom:
+    default: return Category::All;
+    }
+}
+
+bool IsExpansionCategory(const std::string& category)
+{
+    const std::string normalized = BrigMapCatalog::ToLowerAscii(category);
+    return normalized == "blue_shift" || normalized == "opposing_force";
+}
+
+std::vector<BrigCampaignCatalog::Campaign> GetSelectableCampaigns(
+    const std::vector<BrigMapCatalog::MapMetadata>& maps,
+    BrigCampaignCatalog::Category category)
+{
+    auto campaigns = BrigCampaignCatalog::BuildCampaigns(
+        maps, BrigMapCatalog::GameMode::SinglePlayer, category);
+
+    if (category == BrigCampaignCatalog::Category::All)
+    {
+        campaigns.erase(
+            std::remove_if(campaigns.begin(), campaigns.end(),
+                [](const BrigCampaignCatalog::Campaign& campaign)
+                {
+                    return IsExpansionCategory(campaign.category) ||
+                        BrigMapCatalog::ToLowerAscii(campaign.id) == "blue_shift" ||
+                        BrigMapCatalog::ToLowerAscii(campaign.id) == "opposing_force";
+                }),
+            campaigns.end());
+    }
+
+    return campaigns;
+}
+
+bool LaunchSingleplayerMap(const std::string& mapId)
+{
+    if (!gEngfuncs.pfnClientCmd)
+        return false;
+
+    const auto maps = LoadClientMapCatalog();
+    if (!BrigGameModeRegistry::CanLaunchMap(
+            maps, mapId, BrigMapCatalog::GameMode::SinglePlayer))
+    {
+        gEngfuncs.Con_DPrintf("BRIG menu: refusing to launch unregistered or unsupported map '%s'.\n",
+            mapId.c_str());
+        return false;
+    }
+
+    auto& session = BrigSession::GetActiveSessionConfiguration();
+    session.mode = BrigMapCatalog::GameMode::SinglePlayer;
+    session.connectionType = BrigSession::ConnectionType::Local;
+    session.mapId = mapId;
+    session.maxPlayers = 1;
+    session.difficulty = BrigSession::NormalizeDifficulty(session.difficulty);
+
+    char skillCommand[32];
+    std::snprintf(skillCommand, sizeof(skillCommand), "skill %d\n", session.difficulty);
+    gEngfuncs.pfnClientCmd(skillCommand);
+    gEngfuncs.pfnClientCmd(session.allowCheats ? "sv_cheats 1\n" : "sv_cheats 0\n");
+
+    const std::string mapCommand = "map " + mapId + "\n";
+    gEngfuncs.pfnClientCmd(mapCommand.c_str());
+    return true;
+}
 } // namespace
 
 CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
@@ -389,7 +477,10 @@ void CBrigMainMenuPanel::HideButtons()
     m_iBackButtonSlot = -1;
 
     for (int i = 0; i < ButtonCapacity; ++i)
+    {
         m_pButtons[i]->setVisible(false);
+        m_buttonActions[i] = ButtonAction{};
+    }
 }
 
 void CBrigMainMenuPanel::SetButton(
@@ -398,10 +489,50 @@ void CBrigMainMenuPanel::SetButton(
     if (slot < 0 || slot >= ButtonCapacity)
         return;
 
-    m_buttonActions[slot] = action;
+    m_buttonActions[slot].command = ButtonCommand::Navigate;
+    m_buttonActions[slot].navigationAction = action;
+    m_buttonActions[slot].target.clear();
     m_pButtons[slot]->setText(label.c_str());
     m_pButtons[slot]->setVisible(true);
     m_iButtonCount = std::max(m_iButtonCount, slot + 1);
+}
+
+void CBrigMainMenuPanel::SetCommandButton(
+    int slot, ButtonCommand command, const std::string& label, const std::string& target)
+{
+    if (slot < 0 || slot >= ButtonCapacity)
+        return;
+
+    m_buttonActions[slot].command = command;
+    m_buttonActions[slot].target = target;
+    m_pButtons[slot]->setText(label.c_str());
+    m_pButtons[slot]->setVisible(true);
+    m_iButtonCount = std::max(m_iButtonCount, slot + 1);
+}
+
+void CBrigMainMenuPanel::RenderPagedEntries(const std::vector<MenuEntry>& entries)
+{
+    if (m_iListOffset < 0)
+        m_iListOffset = 0;
+
+    if (m_iListOffset >= static_cast<int>(entries.size()) && !entries.empty())
+        m_iListOffset = ((static_cast<int>(entries.size()) - 1) / ListPageSize) * ListPageSize;
+
+    int slot = 0;
+    if (m_iListOffset > 0)
+        SetCommandButton(slot++, ButtonCommand::PreviousPage, MenuText("BRIG_Menu_Previous", "Previous"));
+
+    const int end = std::min(static_cast<int>(entries.size()), m_iListOffset + ListPageSize);
+    for (int index = m_iListOffset; index < end; ++index)
+    {
+        const MenuEntry& entry = entries[static_cast<std::size_t>(index)];
+        SetCommandButton(slot++, entry.command, entry.label, entry.target);
+    }
+
+    if (end < static_cast<int>(entries.size()))
+        SetCommandButton(slot++, ButtonCommand::NextPage, MenuText("BRIG_Menu_Next", "Next"));
+
+    SetCommandButton(slot, ButtonCommand::Back, MenuText("BRIG_Menu_Back", "Back"));
 }
 
 void CBrigMainMenuPanel::RenderPage()
@@ -410,6 +541,7 @@ void CBrigMainMenuPanel::RenderPage()
     using BrigMenuNavigation::Page;
 
     HideButtons();
+    bool pageHasOwnBackButton = false;
 
     switch (m_navigation.CurrentPage())
     {
@@ -423,9 +555,203 @@ void CBrigMainMenuPanel::RenderPage()
         break;
 
     case Page::Singleplayer:
+    {
         m_pTitle->setText(MenuText("BRIG_Menu_SingleplayerTitle", "SINGLEPLAYER").c_str());
-        m_pBody->setText(BuildCampaignListText().c_str());
+        const auto maps = LoadClientMapCatalog();
+        const auto campaigns = GetSelectableCampaigns(maps, m_campaignCategory);
+        std::ostringstream body;
+        body << MenuText("BRIG_Menu_Category", "Category") << ": "
+             << CampaignCategoryFallback(m_campaignCategory) << "\n";
+        body << campaigns.size() << " "
+             << MenuText("BRIG_Menu_CampaignsAvailable", "playable campaigns registered");
+        m_pBody->setText(body.str().c_str());
+
+        SetCommandButton(0, ButtonCommand::CycleCategory,
+            std::string(MenuText("BRIG_Menu_Category", "Category")) + ": " +
+                CampaignCategoryFallback(m_campaignCategory));
+        SetCommandButton(1, ButtonCommand::OpenCampaignList,
+            MenuText("BRIG_Menu_BrowseCampaigns", "Browse campaigns"));
+        SetCommandButton(2, ButtonCommand::OpenTrainingCourses,
+            MenuText("BRIG_Menu_Training", "Training"));
+        SetCommandButton(3, ButtonCommand::OpenGameSettings,
+            MenuText("BRIG_Menu_GameSettings", "Game settings"));
         break;
+    }
+
+    case Page::CampaignList:
+    {
+        pageHasOwnBackButton = true;
+        m_pTitle->setText(MenuText("BRIG_Menu_CampaignsTitle", "CAMPAIGNS").c_str());
+        if (m_campaignCategory == BrigCampaignCatalog::Category::BlueShift ||
+            m_campaignCategory == BrigCampaignCatalog::Category::OpposingForce)
+        {
+            m_pBody->setText(MenuText("BRIG_Menu_ExpansionUnavailable",
+                "This expansion is not implemented for BRIG RPG 2 yet.").c_str());
+            RenderPagedEntries({});
+            break;
+        }
+
+        const auto maps = LoadClientMapCatalog();
+        const auto campaigns = GetSelectableCampaigns(maps, m_campaignCategory);
+        std::vector<MenuEntry> entries;
+        for (const auto& campaign : campaigns)
+        {
+            std::ostringstream label;
+            label << campaign.title << " (" << campaign.ChapterCount() << " "
+                  << MenuText("BRIG_Menu_Chapters", "chapters") << ")";
+            entries.push_back({ButtonCommand::OpenCampaign, label.str(), campaign.id});
+        }
+
+        m_pBody->setText(entries.empty()
+            ? MenuText("BRIG_Menu_NoCampaigns", "No playable campaigns are registered in this category.").c_str()
+            : MenuText("BRIG_Menu_SelectCampaign", "Select a campaign.").c_str());
+        RenderPagedEntries(entries);
+        break;
+    }
+
+    case Page::CampaignChapters:
+    {
+        pageHasOwnBackButton = true;
+        m_pTitle->setText(MenuText("BRIG_Menu_ChaptersTitle", "CAMPAIGN").c_str());
+        const auto maps = LoadClientMapCatalog();
+        const auto campaigns = GetSelectableCampaigns(maps, m_campaignCategory);
+        const auto campaign = std::find_if(campaigns.begin(), campaigns.end(),
+            [&](const BrigCampaignCatalog::Campaign& item) { return item.id == m_selectedCampaignId; });
+
+        if (campaign == campaigns.end())
+        {
+            m_pBody->setText(MenuText("BRIG_Menu_SelectionUnavailable",
+                "The selected campaign is no longer available.").c_str());
+            RenderPagedEntries({});
+            break;
+        }
+
+        m_pBody->setText(campaign->title.c_str());
+        std::vector<MenuEntry> entries;
+        if (const auto* startMap = campaign->StartMap())
+        {
+            if (BrigGameModeRegistry::CanLaunchMap(
+                    maps, startMap->name, BrigMapCatalog::GameMode::SinglePlayer))
+            {
+                entries.push_back({ButtonCommand::LaunchMap,
+                    std::string(MenuText("BRIG_Menu_StartCampaign", "Start campaign")) +
+                        " - " + startMap->title,
+                    startMap->name});
+            }
+        }
+        entries.push_back({ButtonCommand::OpenCampaignMaps,
+            MenuText("BRIG_Menu_AllCampaignMaps", "All campaign maps"), campaign->id});
+
+        for (const auto& chapter : campaign->chapters)
+        {
+            std::ostringstream label;
+            label << chapter.title << " (" << chapter.MapCount() << " "
+                  << MenuText("BRIG_Menu_Maps", "maps") << ")";
+            entries.push_back({ButtonCommand::OpenChapter, label.str(), chapter.id});
+        }
+
+        RenderPagedEntries(entries);
+        break;
+    }
+
+    case Page::ChapterMaps:
+    case Page::CampaignMaps:
+    case Page::TrainingMaps:
+    {
+        pageHasOwnBackButton = true;
+        const bool chapterPage = m_navigation.CurrentPage() == Page::ChapterMaps;
+        const bool campaignPage = m_navigation.CurrentPage() == Page::CampaignMaps;
+        m_pTitle->setText(chapterPage
+            ? MenuText("BRIG_Menu_ChapterMapsTitle", "CHAPTER MAPS").c_str()
+            : (campaignPage
+                ? MenuText("BRIG_Menu_CampaignMapsTitle", "CAMPAIGN MAPS").c_str()
+                : MenuText("BRIG_Menu_TrainingMapsTitle", "TRAINING MAPS").c_str()));
+
+        const auto maps = LoadClientMapCatalog();
+        std::vector<BrigMapCatalog::MapMetadata> selectedMaps;
+        std::string heading;
+
+        if (chapterPage || campaignPage)
+        {
+            const auto campaigns = GetSelectableCampaigns(maps, m_campaignCategory);
+            const auto campaign = std::find_if(campaigns.begin(), campaigns.end(),
+                [&](const BrigCampaignCatalog::Campaign& item) { return item.id == m_selectedCampaignId; });
+            if (campaign != campaigns.end())
+            {
+                if (chapterPage)
+                {
+                    const auto chapter = std::find_if(campaign->chapters.begin(), campaign->chapters.end(),
+                        [&](const BrigCampaignCatalog::Chapter& item) { return item.id == m_selectedChapterId; });
+                    if (chapter != campaign->chapters.end())
+                    {
+                        selectedMaps = chapter->maps;
+                        heading = chapter->title;
+                    }
+                }
+                else
+                {
+                    selectedMaps = campaign->maps;
+                    heading = campaign->title;
+                }
+            }
+        }
+        else
+        {
+            const auto courses = BrigCampaignCatalog::BuildTrainingCourses(
+                maps, BrigMapCatalog::GameMode::SinglePlayer);
+            const auto course = std::find_if(courses.begin(), courses.end(),
+                [&](const BrigCampaignCatalog::Campaign& item) { return item.id == m_selectedTrainingCourseId; });
+            if (course != courses.end())
+            {
+                selectedMaps = course->maps;
+                heading = course->title;
+            }
+        }
+
+        m_pBody->setText(heading.empty()
+            ? MenuText("BRIG_Menu_SelectionUnavailable",
+                "The selected map group is no longer available.").c_str()
+            : heading.c_str());
+
+        std::vector<MenuEntry> entries;
+        for (const auto& map : selectedMaps)
+        {
+            if (!BrigGameModeRegistry::CanLaunchMap(
+                    maps, map.name, BrigMapCatalog::GameMode::SinglePlayer))
+                continue;
+
+            std::ostringstream label;
+            label << map.title << " [" << map.name << "]";
+            entries.push_back({ButtonCommand::LaunchMap, label.str(), map.name});
+        }
+        if (entries.empty() && !heading.empty())
+            m_pBody->setText(MenuText("BRIG_Menu_NoLaunchableMaps",
+                "No launchable maps are available in this selection.").c_str());
+        RenderPagedEntries(entries);
+        break;
+    }
+
+    case Page::TrainingCourses:
+    {
+        pageHasOwnBackButton = true;
+        m_pTitle->setText(MenuText("BRIG_Menu_Training", "TRAINING").c_str());
+        const auto maps = LoadClientMapCatalog();
+        const auto courses = BrigCampaignCatalog::BuildTrainingCourses(
+            maps, BrigMapCatalog::GameMode::SinglePlayer);
+        std::vector<MenuEntry> entries;
+        for (const auto& course : courses)
+        {
+            std::ostringstream label;
+            label << course.title << " (" << course.MapCount() << " "
+                  << MenuText("BRIG_Menu_Maps", "maps") << ")";
+            entries.push_back({ButtonCommand::OpenTrainingCourse, label.str(), course.id});
+        }
+        m_pBody->setText(entries.empty()
+            ? MenuText("BRIG_Menu_NoTraining", "No training courses are registered.").c_str()
+            : MenuText("BRIG_Menu_SelectTraining", "Select a training course.").c_str());
+        RenderPagedEntries(entries);
+        break;
+    }
 
     case Page::CreateGame:
         m_pTitle->setText(MenuText("BRIG_Menu_CreateGameTitle", "CREATE GAME").c_str());
@@ -433,9 +759,19 @@ void CBrigMainMenuPanel::RenderPage()
         break;
 
     case Page::GameSettings:
-        m_pTitle->setText(MenuText("BRIG_Menu_GameTitle", "GAME").c_str());
+    {
+        m_pTitle->setText(MenuText("BRIG_Menu_GameTitle", "GAME SETTINGS").c_str());
         m_pBody->setText(BuildSessionText().c_str());
+        const auto& session = BrigSession::GetActiveSessionConfiguration();
+        SetCommandButton(0, ButtonCommand::ToggleDifficulty,
+            std::string(MenuText("BRIG_Menu_Difficulty", "Difficulty")) + ": " +
+                BrigSession::DifficultyName(session.difficulty));
+        SetCommandButton(1, ButtonCommand::ToggleCheats,
+            std::string(MenuText("BRIG_Menu_Cheats", "Cheats")) + ": " +
+                MenuText(session.allowCheats ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
+                    session.allowCheats ? "Enabled" : "Disabled"));
         break;
+    }
 
     case Page::MultiplayerHub:
         m_pTitle->setText(MenuText("BRIG_Menu_MultiplayerTitle", "MULTIPLAYER").c_str());
@@ -470,15 +806,17 @@ void CBrigMainMenuPanel::RenderPage()
         m_pBody->setText(BuildUnavailableText("BRIG_Menu_ConnectPending",
             "Server connection UI will be connected in a later stage.").c_str());
         break;
+
     }
 
-    if (m_navigation.CanGoBack())
+    if (m_navigation.CanGoBack() && !pageHasOwnBackButton)
     {
         SetButton(m_iButtonCount, Action::CreateGame, MenuText("BRIG_Menu_Back", "Back"));
         m_iBackButtonSlot = m_iButtonCount - 1;
     }
 
-    const std::string footnote = MenuText("BRIG_Menu_Footnote", "UP / DOWN - Select    ENTER - Open    ESC - Back");
+    const std::string footnote = MenuText("BRIG_Menu_Footnote",
+        "UP / DOWN - Select    ENTER - Open    ESC - Back");
     m_pFootnote->setText(footnote.c_str());
 
     if (m_iButtonCount > 0)
@@ -592,6 +930,8 @@ std::string CBrigMainMenuPanel::BuildSessionText() const
          << (session.mapId.empty() ? MenuText("BRIG_Menu_NotSelected", "Not selected") : session.mapId) << "\n";
     text << MenuText("BRIG_Menu_SessionPlayers", "Max players") << ": "
          << session.maxPlayers << "\n";
+    text << MenuText("BRIG_Menu_SessionDifficulty", "Difficulty") << ": "
+         << BrigSession::DifficultyName(session.difficulty) << "\n";
     text << MenuText("BRIG_Menu_SessionLan", "LAN") << ": "
          << MenuText(session.lan ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
              session.lan ? "Enabled" : "Disabled") << "\n";
@@ -675,8 +1015,99 @@ void CBrigMainMenuPanel::ActivateButton(int slot)
     ActivateAction(m_buttonActions[slot]);
 }
 
-void CBrigMainMenuPanel::ActivateAction(BrigMenuNavigation::Action action)
+void CBrigMainMenuPanel::ActivateAction(const ButtonAction& action)
 {
-    if (m_navigation.Navigate(action))
+    switch (action.command)
+    {
+    case ButtonCommand::Navigate:
+        if (m_navigation.Navigate(action.navigationAction))
+            RenderPage();
+        return;
+    case ButtonCommand::Back:
+        if (m_navigation.Back())
+            RenderPage();
+        else if (gViewPort)
+            gViewPort->HideTopMenu();
+        return;
+    case ButtonCommand::CycleCategory:
+        m_campaignCategory = NextCampaignCategory(m_campaignCategory);
+        m_iListOffset = 0;
         RenderPage();
+        return;
+    case ButtonCommand::OpenCampaignList:
+        m_iListOffset = 0;
+        if (m_navigation.NavigateTo(BrigMenuNavigation::Page::CampaignList))
+            RenderPage();
+        return;
+    case ButtonCommand::OpenTrainingCourses:
+        m_iListOffset = 0;
+        if (m_navigation.NavigateTo(BrigMenuNavigation::Page::TrainingCourses))
+            RenderPage();
+        return;
+    case ButtonCommand::OpenGameSettings:
+        if (m_navigation.NavigateTo(BrigMenuNavigation::Page::GameSettings))
+            RenderPage();
+        return;
+    case ButtonCommand::OpenCampaign:
+        m_selectedCampaignId = action.target;
+        m_iListOffset = 0;
+        if (m_navigation.NavigateTo(BrigMenuNavigation::Page::CampaignChapters))
+            RenderPage();
+        return;
+    case ButtonCommand::OpenChapter:
+        m_selectedChapterId = action.target;
+        m_iListOffset = 0;
+        if (m_navigation.NavigateTo(BrigMenuNavigation::Page::ChapterMaps))
+            RenderPage();
+        return;
+    case ButtonCommand::OpenCampaignMaps:
+        m_iListOffset = 0;
+        if (m_navigation.NavigateTo(BrigMenuNavigation::Page::CampaignMaps))
+            RenderPage();
+        return;
+    case ButtonCommand::OpenTrainingCourse:
+        m_selectedTrainingCourseId = action.target;
+        m_iListOffset = 0;
+        if (m_navigation.NavigateTo(BrigMenuNavigation::Page::TrainingMaps))
+            RenderPage();
+        return;
+    case ButtonCommand::LaunchMap:
+        if (LaunchSingleplayerMap(action.target))
+        {
+            if (gViewPort)
+                gViewPort->HideTopMenu();
+        }
+        else
+        {
+            m_pFootnote->setText(MenuText("BRIG_Menu_LaunchRejected",
+                "Launch refused: this map is missing, unsupported or disabled for Singleplayer.").c_str());
+            gEngfuncs.Con_DPrintf("BRIG menu: Singleplayer launch validation failed.\n");
+        }
+        return;
+    case ButtonCommand::ToggleDifficulty:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.difficulty = BrigSession::NextDifficulty(session.difficulty);
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::ToggleCheats:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.allowCheats = !session.allowCheats;
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::PreviousPage:
+        m_iListOffset = std::max(0, m_iListOffset - ListPageSize);
+        RenderPage();
+        return;
+    case ButtonCommand::NextPage:
+        m_iListOffset += ListPageSize;
+        RenderPage();
+        return;
+    case ButtonCommand::None:
+    default:
+        return;
+    }
 }

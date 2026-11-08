@@ -133,6 +133,10 @@ int main()
     assert(IsModeAllowed(hazard, GameMode::SinglePlayer));
     assert(IsModeAllowed(hazard, GameMode::CoOp));
     assert(!IsModeAllowed(hazard, GameMode::Deathmatch));
+    assert(BrigGameModeRegistry::CanLaunchMap(
+        {hazard}, "t0a0", GameMode::SinglePlayer));
+    assert(!BrigGameModeRegistry::CanLaunchMap(
+        {hazard}, "t0a0", GameMode::CoOp));
 
     MapMetadata mapContinuation = map;
     mapContinuation.name = "c0a0a";

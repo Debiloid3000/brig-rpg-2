@@ -26,7 +26,7 @@ The category filter supports these metadata identifiers:
 | Opposing Force | `opposing_force` |
 | Custom BRIG campaigns | `custom` |
 
-A category appears only when matching map records exist in the installed catalog. Empty Blue Shift or Opposing Force categories must not be populated with guessed BSP names.
+The selector cycles through the known categories. A category with no registered, launchable content shows an unavailable/empty state; Blue Shift and Opposing Force remain explicitly locked, and no guessed BSP names are introduced.
 
 ## Chapters and start maps
 

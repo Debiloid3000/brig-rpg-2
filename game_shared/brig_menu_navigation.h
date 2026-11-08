@@ -14,7 +14,13 @@ enum class Page
     ServerBrowser,
     Lobby,
     CreateLobby,
-    ConnectServer
+    ConnectServer,
+    CampaignList,
+    CampaignChapters,
+    ChapterMaps,
+    CampaignMaps,
+    TrainingCourses,
+    TrainingMaps
 };
 
 enum class Action
@@ -80,6 +86,16 @@ public:
         }
 
         if (!valid || target == m_page)
+            return false;
+
+        m_history.push_back(m_page);
+        m_page = target;
+        return true;
+    }
+
+    bool NavigateTo(Page target)
+    {
+        if (target == m_page)
             return false;
 
         m_history.push_back(m_page);
