@@ -46,6 +46,20 @@ A preset is only a starting layout. Users can subsequently edit each CVAR indepe
 The Windows x86 CI workflow is the automated build authority. A successful DLL build does not replace a Steam Legacy runtime check; runtime-only cases must be reported separately when that environment is unavailable.
 
 
+## Main menu and session navigation
+
+The engine-owned main menu remains in `resource/gamemenu.res`. BRIG's navigation pages are VGUI1 panels hosted by `TeamFortressViewport`; `cl_dll/menu.cpp` remains the server-driven HUD `ShowMenu` component. No engine executable or engine DLL is replaced.
+
+The GameMenu Play and Multiplayer items invoke client-DLL commands `brig_menu_play` and `brig_menu_multiplayer`. Standard Resume, Disconnect, Save/Load, Options and Quit callbacks remain intact. Save/Load continue to use the engine's `notmulti` filter.
+
+The menu consumes shared data rather than maintaining parallel lists:
+- `campaign_catalog.h` derives campaign groups from Map Catalog records.
+- `game_mode_registry.h` shares the same `GameMode` enum used by the game-rules feature registry and reports launch readiness.
+- `session_config.h` owns one client-side `SessionConfiguration` object; menu pages read it, and future settings controls must update it rather than create another copy.
+- Server Browser, Lobby, Create Lobby and Connect have real navigation routes but report their unimplemented network status until those subsystems are built.
+
+The Singleplayer page is currently a read-only summary of campaigns generated from the central map catalog. Create Game and Game pages expose the correct integration points; campaign launch, editable session/server settings, and network actions remain later stages.
+
 ## Unified map catalog
 
 The repository source registry is `_folder/brig/maps/brig_maplist.txt`; per-map metadata lives beside the BSPs in `_folder/brig/maps/<mapname>.cfg`. At runtime they resolve to `maps/brig_maplist.txt` and `maps/<mapname>.cfg` inside the installed mod. Singleplayer, Create Game, Co-op, DeathMatch, Team DeathMatch, lobby, and map rotation must all consume this same catalog. Do not maintain a second BSP list in any UI or game-mode subsystem.

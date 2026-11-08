@@ -37,6 +37,11 @@ class MapMetadataPackagingTests(unittest.TestCase):
 
             if values.get("brig_campaign") == "half_life":
                 self.assertEqual(values.get("brig_coop"), "1", map_id)
+            elif values.get("brig_campaign") == "hazard_course":
+                self.assertEqual(values.get("brig_singleplayer"), "1", map_id)
+                self.assertEqual(values.get("brig_coop"), "1", map_id)
+                self.assertEqual(values.get("brig_deathmatch"), "0", map_id)
+                self.assertEqual(values.get("brig_team_deathmatch"), "0", map_id)
             elif values.get("brig_campaign") == "half_life_deathmatch":
                 self.assertEqual(values.get("brig_deathmatch"), "1", map_id)
                 self.assertEqual(values.get("brig_team_deathmatch"), "1", map_id)

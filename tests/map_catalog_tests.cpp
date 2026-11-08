@@ -2,6 +2,10 @@
 #include <string>
 #include <vector>
 #include "map_catalog.h"
+#include "campaign_catalog.h"
+#include "game_mode_registry.h"
+#include "session_config.h"
+#include "brig_menu_navigation.h"
 
 using namespace BrigMapCatalog;
 
@@ -109,5 +113,77 @@ int main()
     assert(IsCatalogMapUsable("c0a0", true));
     assert(!IsCatalogMapUsable("c0a0", false));
     assert(!IsCatalogMapUsable("../c0a0", true));
+
+    // Hazard Course remains a Singleplayer training campaign but is also
+    // declared Co-op eligible in the shared map metadata.
+    MapMetadata hazard = MakeDefaultMetadata("t0a0");
+    std::vector<ParseIssue> hazardIssues;
+    assert(ParseMapConfig(
+        "brig_campaign \"hazard_course\"\n"
+        "brig_campaign_title \"Hazard Course\"\n"
+        "brig_category \"training\"\n"
+        "brig_chapter \"training\"\n"
+        "brig_singleplayer 1\n"
+        "brig_coop 1\n"
+        "brig_deathmatch 0\n"
+        "brig_team_deathmatch 0\n"
+        "brig_default_mode \"singleplayer\"\n",
+        hazard, &hazardIssues));
+    assert(hazardIssues.empty());
+    assert(IsModeAllowed(hazard, GameMode::SinglePlayer));
+    assert(IsModeAllowed(hazard, GameMode::CoOp));
+    assert(!IsModeAllowed(hazard, GameMode::Deathmatch));
+
+    const auto campaigns = BrigCampaignCatalog::BuildCampaigns({map, hazard}, GameMode::SinglePlayer);
+    assert(campaigns.size() == 2);
+    bool foundHazard = false;
+    for (const auto& campaign : campaigns)
+    {
+        if (campaign.id == "hazard_course")
+        {
+            foundHazard = true;
+            assert(campaign.title == "Hazard Course");
+            assert(campaign.MapCount() == 1);
+            assert(campaign.ChapterCount() == 1);
+        }
+    }
+    assert(foundHazard);
+
+    assert(BrigGameModeRegistry::IsGameplayReady(GameMode::SinglePlayer));
+    assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::CoOp));
+    assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::Deathmatch));
+    assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::TeamDeathmatch));
+
+    auto& session = BrigSession::GetActiveSessionConfiguration();
+    session.mode = GameMode::CoOp;
+    session.maxPlayers = 4;
+    assert(BrigSession::GetActiveSessionConfiguration().mode == GameMode::CoOp);
+    assert(BrigSession::GetActiveSessionConfiguration().maxPlayers == 4);
+    session = BrigSession::SessionConfiguration{};
+
+    BrigMenuNavigation::State navigation;
+    navigation.Start(BrigMenuNavigation::Page::PlayHub);
+    assert(navigation.Navigate(BrigMenuNavigation::Action::Singleplayer));
+    assert(navigation.CurrentPage() == BrigMenuNavigation::Page::Singleplayer);
+    assert(navigation.Back());
+    assert(navigation.CurrentPage() == BrigMenuNavigation::Page::PlayHub);
+    assert(navigation.Navigate(BrigMenuNavigation::Action::CreateGame));
+    assert(navigation.CurrentPage() == BrigMenuNavigation::Page::CreateGame);
+    assert(navigation.Back());
+    assert(navigation.Navigate(BrigMenuNavigation::Action::GameSettings));
+    assert(navigation.Back());
+    assert(!navigation.Back());
+
+    navigation.Start(BrigMenuNavigation::Page::MultiplayerHub);
+    assert(navigation.Navigate(BrigMenuNavigation::Action::ServerBrowser));
+    assert(navigation.Back());
+    assert(navigation.Navigate(BrigMenuNavigation::Action::Lobby));
+    assert(navigation.Back());
+    assert(navigation.Navigate(BrigMenuNavigation::Action::CreateLobby));
+    assert(navigation.Back());
+    assert(navigation.Navigate(BrigMenuNavigation::Action::ConnectServer));
+    assert(navigation.Back());
+    assert(!navigation.Navigate(BrigMenuNavigation::Action::Singleplayer));
+
     return 0;
 }

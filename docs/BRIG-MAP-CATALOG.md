@@ -20,10 +20,10 @@ Each non-comment manifest line is one BSP identifier, without a path or extensio
 The current manifest registers **115 BSPs** already present in the audited BRIG mod directory:
 
 - **96 Half-Life 1 campaign maps** across the 15 story chapters, declared for Singleplayer and Co-op in map metadata. The Co-op flag expresses intended map/campaign eligibility; it does not activate the game mode or certify that the campaign is playable in Co-op.
-- **7 Hazard Course maps**, marked Singleplayer-only.
+- **7 Hazard Course maps**, marked for both Singleplayer and Co-op eligibility while retaining Singleplayer as their default mode.
 - **12 Half-Life Deathmatch arenas**, marked DeathMatch and Team DeathMatch.
 
-Every registered map has its own CFG. The branch already has Co-op mode identification and a small amount of mode-specific behavior, but it does not yet have a complete, tested Co-op game-rules and campaign implementation. Map metadata does not enable that gameplay. The later Co-op work still needs dedicated rules, spawn-point selection/fallbacks, respawn behavior and campaign/runtime validation. Blue Shift and Opposing Force are not registered as playable campaigns in this pass.
+Every registered map has its own CFG. The branch already has Co-op mode identification and a small amount of mode-specific behavior, but it does not yet have a complete, tested Co-op game-rules and campaign implementation. Map metadata does not enable that gameplay. Hazard Course now declares Co-op eligibility as requested, but its maps are still not playable in Co-op until the later Co-op work adds dedicated rules, spawn-point selection/fallbacks, respawn behavior and campaign/runtime validation. Blue Shift and Opposing Force are not registered as playable campaigns in this pass.
 
 A map is returned by the runtime catalog only when its identifier is safe and the corresponding `maps/<id>.bsp` exists and has GoldSrc BSP version 30. Missing or invalid BSPs are logged and skipped; they are not offered to map selection or the `sv_load_all_maps` diagnostic.
 
