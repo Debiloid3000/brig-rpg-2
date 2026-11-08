@@ -1824,7 +1824,10 @@ bool TeamFortressViewport::KeyInput(bool down, int keynum, const char* pszCurren
 	// The BRIG navigation panel owns keyboard input while it is visible.
 	if (m_pBrigMainMenu && m_pCurrentMenu == m_pBrigMainMenu && 0 == gEngfuncs.Con_IsVisible())
 	{
-		m_pBrigMainMenu->HandleKeyInput(down, keynum);
+		// A focused TextEntry receives its key events through VGUI App. Do not
+		// let typing or editing keys move the main menu selection.
+		if (!m_pBrigMainMenu->HandleTextEntryKeyInput(down, keynum))
+			m_pBrigMainMenu->HandleKeyInput(down, keynum);
 		return false;
 	}
 

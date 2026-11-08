@@ -20,6 +20,7 @@ public:
     void Open() override;
     void paintBackground() override;
     void HandleKeyInput(bool down, int keynum);
+    bool HandleTextEntryKeyInput(bool down, int keynum);
     void ActivateButton(int slot);
 
 private:

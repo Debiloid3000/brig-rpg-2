@@ -10,6 +10,8 @@
 #include <utility>
 
 #include <VGUI_TextPanel.h>
+#include <VGUI_App.h>
+#include <VGUI_KeyCode.h>
 
 #include "cl_util.h"
 #include "campaign_catalog.h"
@@ -22,6 +24,96 @@
 
 namespace
 {
+bool GoldSrcKeyToVGuiKey(int keynum, KeyCode& code, bool& printable)
+{
+    printable = false;
+
+    if (keynum >= '0' && keynum <= '9')
+    {
+        code = static_cast<KeyCode>(KEY_0 + keynum - '0');
+        printable = true;
+        return true;
+    }
+
+    if (keynum >= 'a' && keynum <= 'z')
+    {
+        code = static_cast<KeyCode>(KEY_A + keynum - 'a');
+        printable = true;
+        return true;
+    }
+
+    if (keynum >= 'A' && keynum <= 'Z')
+    {
+        code = static_cast<KeyCode>(KEY_A + keynum - 'A');
+        printable = true;
+        return true;
+    }
+
+    switch (keynum)
+    {
+    case 32: code = KEY_SPACE; printable = true; return true;
+    case '-': code = KEY_MINUS; printable = true; return true;
+    case '=': code = KEY_EQUAL; printable = true; return true;
+    case '[': code = KEY_LBRACKET; printable = true; return true;
+    case ']': code = KEY_RBRACKET; printable = true; return true;
+    case ';': code = KEY_SEMICOLON; printable = true; return true;
+    case 39: code = KEY_APOSTROPHE; printable = true; return true;
+    case 96: code = KEY_BACKQUOTE; printable = true; return true;
+    case ',': code = KEY_COMMA; printable = true; return true;
+    case '.': code = KEY_PERIOD; printable = true; return true;
+    case '/': code = KEY_SLASH; printable = true; return true;
+    case 92: code = KEY_BACKSLASH; printable = true; return true;
+    case K_TAB: code = KEY_TAB; return true;
+    case K_ENTER: code = KEY_ENTER; return true;
+    case K_KP_ENTER: code = KEY_PAD_ENTER; return true;
+    case K_ESCAPE: code = KEY_ESCAPE; return true;
+    case K_BACKSPACE: code = KEY_BACKSPACE; return true;
+    case K_UPARROW: code = KEY_UP; return true;
+    case K_DOWNARROW: code = KEY_DOWN; return true;
+    case K_LEFTARROW: code = KEY_LEFT; return true;
+    case K_RIGHTARROW: code = KEY_RIGHT; return true;
+    case K_SHIFT: code = KEY_LSHIFT; return true;
+    case K_CTRL: code = KEY_LCONTROL; return true;
+    case K_ALT: code = KEY_LALT; return true;
+    case K_F1: code = KEY_F1; return true;
+    case K_F2: code = KEY_F2; return true;
+    case K_F3: code = KEY_F3; return true;
+    case K_F4: code = KEY_F4; return true;
+    case K_F5: code = KEY_F5; return true;
+    case K_F6: code = KEY_F6; return true;
+    case K_F7: code = KEY_F7; return true;
+    case K_F8: code = KEY_F8; return true;
+    case K_F9: code = KEY_F9; return true;
+    case K_F10: code = KEY_F10; return true;
+    case K_F11: code = KEY_F11; return true;
+    case K_F12: code = KEY_F12; return true;
+    case K_INS: code = KEY_INSERT; return true;
+    case K_DEL: code = KEY_DELETE; return true;
+    case K_PGUP: code = KEY_PAGEUP; return true;
+    case K_PGDN: code = KEY_PAGEDOWN; return true;
+    case K_HOME: code = KEY_HOME; return true;
+    case K_END: code = KEY_END; return true;
+    case K_KP_MINUS: code = KEY_PAD_MINUS; return true;
+    case K_KP_PLUS: code = KEY_PAD_PLUS; return true;
+    case K_KP_MUL: code = KEY_PAD_MULTIPLY; return true;
+    case K_KP_SLASH: code = KEY_PAD_DIVIDE; return true;
+    case K_KP_DEL: code = KEY_PAD_DECIMAL; return true;
+    case K_KP_INS: code = KEY_PAD_0; return true;
+    case K_KP_END: code = KEY_PAD_1; return true;
+    case K_KP_DOWNARROW: code = KEY_PAD_2; return true;
+    case K_KP_PGDN: code = KEY_PAD_3; return true;
+    case K_KP_LEFTARROW: code = KEY_PAD_4; return true;
+    case K_KP_5: code = KEY_PAD_5; return true;
+    case K_KP_RIGHTARROW: code = KEY_PAD_6; return true;
+    case K_KP_HOME: code = KEY_PAD_7; return true;
+    case K_KP_UPARROW: code = KEY_PAD_8; return true;
+    case K_KP_PGUP: code = KEY_PAD_9; return true;
+    case K_CAPSLOCK: code = KEY_CAPSLOCK; return true;
+    default:
+        return false;
+    }
+}
+
 class CBrigMenuButtonSignal final : public ActionSignal
 {
 public:
@@ -1269,6 +1361,46 @@ void CBrigMainMenuPanel::MoveSelection(int direction)
         m_iSelectedButton = 0;
 
     m_pButtons[m_iSelectedButton]->setArmed(true);
+}
+
+bool CBrigMainMenuPanel::HandleTextEntryKeyInput(bool down, int keynum)
+{
+    App* app = App::getInstance();
+    if (!app)
+        return false;
+
+    Panel* focused = app->getFocus();
+    if (focused != m_pServerNameEntry &&
+        focused != m_pPasswordEntry &&
+        focused != m_pServerAddressEntry)
+        return false;
+
+    // Escape remains the menu's Back action. Other keys go to the focused
+    // TextEntry rather than changing the menu's selected button.
+    if (keynum == K_ESCAPE)
+        return false;
+
+    KeyCode code;
+    bool printable = false;
+    if (!GoldSrcKeyToVGuiKey(keynum, code, printable))
+        return true;
+
+    SurfaceBase* surface = focused->getSurfaceBase();
+    if (!surface)
+        return true;
+
+    if (down)
+    {
+        app->internalKeyPressed(code, surface);
+        if (printable)
+            app->internalKeyTyped(code, surface);
+    }
+    else
+    {
+        app->internalKeyReleased(code, surface);
+    }
+
+    return true;
 }
 
 void CBrigMainMenuPanel::HandleKeyInput(bool down, int keynum)
