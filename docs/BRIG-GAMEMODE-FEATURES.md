@@ -1,7 +1,7 @@
 # BRIG RPG 2 — Game Modes and Feature Porting
 
 **Target:** Half-Life Steam Legacy, Windows x86.  
-**Status:** foundation only; this document distinguishes implemented work from candidates and deferred systems.
+**Status:** Singleplayer, DeathMatch, Team DeathMatch and the Co-op listen-server launch path are wired. Co-op uses the stock GoldSrc changelevel pipeline with a Co-op-specific activator/catalog guard. Steam Legacy multi-client runtime verification is still required.
 
 ## Compatibility contract
 
@@ -20,11 +20,11 @@ The mode registry exposes the modes whose existing Legacy rules and launch path 
 1. Singleplayer uses CHalfLifeRules.
 2. Deathmatch uses the original CHalfLifeMultiplay rules.
 3. Team Deathmatch uses the original CHalfLifeTeamplay rules selected through mp_teamplay.
-4. Co-op has a dedicated CHalfLifeCoOp rules class, but remains gated until its inventory/transition behavior, NPC/scripted-map compatibility and Steam Legacy runtime tests are complete.
+4. Co-op uses the dedicated CHalfLifeCoOp rules class and can be selected/launched from Create Game on maps whose installed catalog metadata enables Co-op. This is an implemented gameplay path, not a claim that all NPC/scripted maps have passed runtime testing.
 
 The generic CHalfLifeMultiplay::IsCoOp() reads gpGlobals->coop, while its generic IsDeathmatch() returns true unconditionally. The dedicated CHalfLifeCoOp class reports Co-op and explicitly reports that it is not Deathmatch; the common resolver checks Co-op first. InstallGameRules() checks gpGlobals->coop before the Singleplayer/Deathmatch branch.
 
-Singleplayer, Deathmatch and Team Deathmatch are selectable in Create Game. The UI lists only maps whose installed BSP and map metadata pass the shared catalog/readiness validation. Co-op remains visible as an incomplete mode in status text, but cannot be selected or launched.
+Singleplayer, Co-op, Deathmatch and Team Deathmatch are selectable in Create Game. The UI lists only maps whose installed BSP and map metadata pass the shared catalog/readiness validation. Blue Shift and Opposing Force remain unavailable in every mode.
 
 ## Central mode feature registry
 
@@ -37,20 +37,21 @@ Implemented in `dlls/gamemode_features.h`:
 | Deathmatch | Yes | Yes | No | Yes | No |
 | Team Deathmatch | Yes | Yes | Yes | Yes | No |
 
-The resolver deliberately checks IsCoOp() first. Singleplayer, Deathmatch and Team Deathmatch now pass the shared readiness gate and can be selected from Create Game. Deathmatch reuses CHalfLifeMultiplay; Team Deathmatch reuses CHalfLifeTeamplay and the existing mp_teamplay server cvar. Their map lists are restricted by each BSP's installed catalog metadata. Co-op remains gated until AI/scripted-map compatibility and Steam Legacy runtime tests are complete.
+The resolver deliberately checks IsCoOp() first. All four supported modes pass the shared readiness gate. Deathmatch reuses CHalfLifeMultiplay; Team Deathmatch reuses CHalfLifeTeamplay and the existing mp_teamplay server cvar. Co-op uses CHalfLifeCoOp, does not report itself as Deathmatch, and is launched with deathmatch 0 / coop 1 / mp_teamplay 0. Every mode's map list is restricted by installed BSP and catalog metadata.
 
 ### Implemented Co-op-specific behavior
 
 - `InstallGameRules()` selects `CHalfLifeCoOp` whenever the engine's `coop` global is enabled, before the Singleplayer and Deathmatch branches.
-- `CHalfLifeCoOp` is multiplayer for connection/HUD/respawn purposes, but is not Deathmatch. It uses the normal Singleplayer skill values, allows campaign monsters and the flashlight, and awards zero frag points for player kills.
-- Damage from another player is rejected; self-damage and damage from monsters/world entities retain the base behavior. Player-to-player relationship queries return `GR_TEAMMATE`.
+- `CHalfLifeCoOp` is multiplayer for connection/HUD/respawn purposes, but is not Deathmatch. It uses the normal Singleplayer skill values, always allows campaign monsters, follows `mp_flashlight` for the flashlight, and awards zero frag points for player kills.
+- Damage from another player is rejected by default; `mp_friendlyfire` can enable it. Player-to-player relationship queries return `GR_TEAMMATE`.
+- Co-op does not run inherited DeathMatch time/frag-limit intermissions or the DeathMatch mapcycle. Story progression is controlled by map-authored `trigger_changelevel` entities.
 - Co-op spawn selection cycles through `info_player_coop` points first and checks that a point is enabled and not occupied by another player. It then tries unoccupied `info_player_start` points; if every usable point is occupied, it falls back to the first usable point without killing another player. A named level-transition start spot keeps priority over ordinary spawn points.
 - When a Co-op player is captured by a Barnacle and has `PFLAG_ONBARNACLE`, BRIG skips item pre-frame and post-frame processing so the captured player cannot use their held item. Existing release handling clears the flag when the Barnacle is killed; player spawn also resets the physics flags.
 - Co-op death does not create a temporary weapon box or strip the player's inventory. Weapon entity links and ammo remain intact, and the active weapon is deployed again on respawn.
 - Co-op spawn preserves ammo after the first spawn. The first spawn still initializes an empty inventory before map equipment/default items are granted.
 - A restored Co-op player is marked as having initialized inventory after the existing Legacy PLAYER save fields have been read; no existing save-field layout was changed.
 
-Co-op death/respawn now keeps the player's weapon entities and ammunition attached to the player instead of packing them into a temporary weapon box or clearing them. The previous active weapon is deployed again after respawn, and the normal map/default loadout is granted only when the player has no retained weapons. The existing Legacy PLAYER save table already serializes weapon pointers and ammo; a successful Co-op restore marks the runtime inventory as initialized without changing the save-field layout. This still needs Steam Legacy runtime verification, including map-change transitions, disconnect/reconnect behavior, and scripted AI.
+Co-op death/respawn keeps the player's weapon entities and ammunition attached to the player instead of packing them into a temporary weapon box or clearing them. The previous active weapon is deployed again after respawn, and the normal map/default loadout is granted only when the player has no retained weapons. The existing Legacy PLAYER save table already serializes weapon pointers and ammo; a successful Co-op restore marks the runtime inventory as initialized without changing the save-field layout. Runtime verification is still required for death/respawn, map transitions, disconnect/reconnect, and scripted AI.
 
 ### Implemented general Half-Life bug fix
 
@@ -89,12 +90,25 @@ The supplied Sven Co-op source link is the official wiki rather than a game-code
 |---|---|---|
 | Barnacle victim release and multi-victim edge cases | Co-op-specific NPC behavior | Candidate for a dedicated test pass; Sven Co-op's published changelog records bugs involving respawn-trigger release, multiple Barnacles and prey references |
 | NPC allies / shared enemy relationships | Co-op-specific | Candidate; must be mediated through Co-op rules, not global NPC changes |
-| Player spawn/respawn and relocation | Co-op-specific | Candidate; map spawnpoint compatibility and death-state reset required |
-| Player-to-player damage policy | Co-op-specific | Candidate; friendly-fire policy belongs in Co-op gamerules |
+| Player spawn/respawn and relocation | Co-op-specific | Implemented with Legacy spawn selection; verify across real multi-client transitions |
+| Player-to-player damage policy | Co-op-specific | Implemented in Co-op gamerules; controlled by `mp_friendlyfire` |
 | Scripted map entities and environmental interactions | General Half-Life / map-dependent | Preserve existing entity semantics; extend only for a documented map use case |
 | Weapon/item respawn and scoring | Deathmatch / Team Deathmatch | Keep separate from Co-op and Singleplayer |
 | Sven Co-op AngelScript hooks, server commands and plugin APIs | Requires another runtime | Not portable without implementing a separate scripting/runtime layer; do not fake those APIs |
 | Sven-specific network, player movement and engine hooks | Engine/runtime-dependent | Excluded unless a Legacy game-DLL-only equivalent is proven |
+
+## Co-op campaign map transitions
+
+Co-op deliberately uses the original GoldSrc trigger_changelevel / CHANGE_LEVEL mechanism rather than a BRIG-specific map sequencer:
+
+- Singleplayer is unchanged: the trigger checks the Legacy local player, resolves its landmark and calls CHANGE_LEVEL as before.
+- In Co-op, the player who touches or activates the trigger is used for the transition-volume check. This avoids assuming that the listen-server host is the player who activated the trigger and supports a dedicated server with no listen-server local player.
+- Before changing maps, Co-op checks the destination against the server's shared map catalog. The target must have an installed GoldSrc BSP and a CFG declaring brig_coop 1.
+- A valid trigger calls the same CHANGE_LEVEL(map, landmark) engine entry point. The server owns the transition; clients do not issue independent map commands. The engine's standard landmark/player transfer path remains responsible for carrying connected players into the new server level.
+- A first valid activation initiates the whole server transition; this is not an all-players-ready barrier. Mappers remain responsible for the map and landmark keys and any trigger_transition volumes.
+- Co-op does not let inherited DeathMatch time/frag limits take the team into a mapcycle. Campaign progression is map-trigger-driven.
+
+The code path is implemented, but it must still be tested in Steam Legacy with two or more clients and with a dedicated server. In particular, verify the loading overlay on every client, player placement at the next landmark/start points, inventory/ammo preservation, and NPC/scripted sequence continuity. Do not mark those runtime cases passed based on CI alone.
 
 ## Future integration contract: menu, map and session settings
 

@@ -101,3 +101,11 @@ The engine GameUI overrides are narrowly SHA-256 allowlisted in `tools/validate_
 The category filter is metadata filtering only. It must not make an unsupported expansion or gameplay mode appear playable. Every launch path must additionally check the content audit and `BrigGameModeRegistry::IsGameplayReady`.
 
 See [BRIG-CAMPAIGNS.md](BRIG-CAMPAIGNS.md) for the installed-content audit and explicit implementation boundaries.
+
+## Co-op map transitions
+
+Co-op uses the original GoldSrc trigger_changelevel entity and CHANGE_LEVEL engine call. The game DLL does not replace the mapper's map or landmark keys with a parallel campaign sequence.
+
+For Co-op only, the trigger uses the player activator for the trigger_transition volume check and validates the destination through MapCatalog_IsAllowedForCoOp. That catalog check requires the BSP to be installed and the destination CFG to declare Co-op support. A successful trigger then calls the normal CHANGE_LEVEL(map, landmark) path; the server owns the level change for the connected session. Singleplayer continues to use its original local-player check and is not filtered through the Co-op catalog gate.
+
+The first valid trigger activation starts the whole server transition; BRIG does not require all players to stand in the trigger simultaneously. The engine's Legacy transition system remains responsible for carrying clients through the server level change and restoring player placement. Verify the loading screen, landmark placement, and inventory/ammo continuity with multiple Steam Legacy clients before calling this behavior runtime-verified.
