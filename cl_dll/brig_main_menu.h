@@ -18,7 +18,6 @@ public:
     void ShowPlay();
     void ShowMultiplayer();
     void Open() override;
-    ~CBrigMainMenuPanel() override;
     void ServerBrowserDataChanged();
     void paintBackground() override;
     void HandleKeyInput(bool down, int keynum);

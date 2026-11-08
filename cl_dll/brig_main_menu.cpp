@@ -22,7 +22,7 @@
 #include "hud.h"
 #include "keydefs.h"
 #include "vgui_int.h"
-#include "common/net_api.h"
+#include "net_api.h"
 #include <cstdint>
 #include <cstdlib>
 
@@ -833,18 +833,6 @@ void CBrigMainMenuPanel::ShowMultiplayer()
 {
     m_navigation.Start(BrigMenuNavigation::Page::MultiplayerHub);
     RenderPage();
-}
-
-CBrigMainMenuPanel::~CBrigMainMenuPanel()
-{
-    g_pBrigMainMenuPanel = nullptr;
-    if (g_lanBrowser.querying && gEngfuncs.pNetAPI &&
-        gEngfuncs.pNetAPI->CancelRequest)
-    {
-        gEngfuncs.pNetAPI->CancelRequest(g_lanBrowser.requestContext);
-    }
-
-    g_lanBrowser.querying = false;
 }
 
 void CBrigMainMenuPanel::ServerBrowserDataChanged()
