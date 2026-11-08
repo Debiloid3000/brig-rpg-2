@@ -62,7 +62,6 @@ def build_command(
     frag_limit: int = 0,
     friendly_fire: bool = False,
     fall_damage: bool = False,
-    weapon_stay: bool = False,
     flashlight: bool = True,
     allow_monsters: bool = False,
     allow_spectators: bool = False,
@@ -127,7 +126,6 @@ def build_command(
         ("+mp_fraglimit", str(frag_limit)),
         ("+mp_friendlyfire", "1" if friendly_fire else "0"),
         ("+mp_falldamage", "1" if fall_damage else "0"),
-        ("+mp_weaponstay", "1" if weapon_stay else "0"),
         ("+mp_flashlight", "1" if flashlight else "0"),
         ("+mp_allowmonsters", "1" if (allow_monsters or mode == "coop") else "0"),
         ("+allow_spectators", "1" if allow_spectators else "0"),
@@ -190,7 +188,6 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--frag-limit", type=int, default=0, help="frags; 0 disables the frag limit")
     parser.add_argument("--friendly-fire", action="store_true")
     parser.add_argument("--fall-damage", action="store_true")
-    parser.add_argument("--weapon-stay", action="store_true")
     parser.add_argument("--no-flashlight", action="store_true")
     parser.add_argument("--allow-monsters", action="store_true", help="used by DeathMatch/TDM; Co-op always permits campaign monsters")
     parser.add_argument("--allow-spectators", action="store_true")
@@ -217,7 +214,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             frag_limit=args.frag_limit,
             friendly_fire=args.friendly_fire,
             fall_damage=args.fall_damage,
-            weapon_stay=args.weapon_stay,
             flashlight=not args.no_flashlight,
             allow_monsters=args.allow_monsters,
             allow_spectators=args.allow_spectators,
