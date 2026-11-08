@@ -191,6 +191,16 @@ int main()
     assert(blueShiftOnly.size() == 1);
     assert(blueShiftOnly[0].id == "blue_shift");
 
+    // A map must pass both the mode-readiness gate and its own metadata gate.
+    assert(BrigGameModeRegistry::CanLaunchMap(
+        {map}, "C0A0", GameMode::SinglePlayer));
+    assert(!BrigGameModeRegistry::CanLaunchMap(
+        {map}, "c0a0", GameMode::CoOp));
+    assert(!BrigGameModeRegistry::CanLaunchMap(
+        {blueShiftMap}, "ba_canal1", GameMode::SinglePlayer));
+    assert(!BrigGameModeRegistry::CanLaunchMap(
+        {map}, "../c0a0", GameMode::SinglePlayer));
+
     const auto trainingCourses = BrigCampaignCatalog::BuildTrainingCourses(
         {hazardContinuation, hazard}, GameMode::SinglePlayer);
     assert(trainingCourses.size() == 1);
@@ -211,16 +221,31 @@ int main()
     assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::Deathmatch));
     assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::TeamDeathmatch));
 
+    assert(BrigSession::NormalizeDifficulty(0) == 1);
+    assert(BrigSession::NormalizeDifficulty(2) == 2);
+    assert(BrigSession::NormalizeDifficulty(4) == 3);
+    assert(BrigSession::NextDifficulty(1) == 2);
+    assert(BrigSession::NextDifficulty(2) == 3);
+    assert(BrigSession::NextDifficulty(3) == 1);
+    assert(std::string(BrigSession::DifficultyName(3)) == "Hard");
+
     auto& session = BrigSession::GetActiveSessionConfiguration();
     session.mode = GameMode::CoOp;
     session.maxPlayers = 4;
+    session.difficulty = 3;
     assert(BrigSession::GetActiveSessionConfiguration().mode == GameMode::CoOp);
     assert(BrigSession::GetActiveSessionConfiguration().maxPlayers == 4);
+    assert(BrigSession::GetActiveSessionConfiguration().difficulty == 3);
     session = BrigSession::SessionConfiguration{};
 
     BrigMenuNavigation::State navigation;
     navigation.Start(BrigMenuNavigation::Page::PlayHub);
     assert(navigation.Navigate(BrigMenuNavigation::Action::Singleplayer));
+    assert(navigation.CurrentPage() == BrigMenuNavigation::Page::Singleplayer);
+    assert(navigation.NavigateTo(BrigMenuNavigation::Page::CampaignList));
+    assert(navigation.CurrentPage() == BrigMenuNavigation::Page::CampaignList);
+    assert(!navigation.NavigateTo(BrigMenuNavigation::Page::CampaignList));
+    assert(navigation.Back());
     assert(navigation.CurrentPage() == BrigMenuNavigation::Page::Singleplayer);
     assert(navigation.Back());
     assert(navigation.CurrentPage() == BrigMenuNavigation::Page::PlayHub);
