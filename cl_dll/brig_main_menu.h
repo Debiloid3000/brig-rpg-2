@@ -18,6 +18,8 @@ public:
     void ShowPlay();
     void ShowMultiplayer();
     void Open() override;
+    ~CBrigMainMenuPanel() override;
+    void ServerBrowserDataChanged();
     void paintBackground() override;
     void HandleKeyInput(bool down, int keynum);
     bool HandleTextEntryKeyInput(bool down, int keynum);
@@ -46,6 +48,10 @@ private:
         ToggleAllowMonsters,
         ToggleSpectators,
         ConnectToServer,
+        RefreshLanServers,
+        JoinBrowserServer,
+        NextServerPage,
+        PreviousServerPage,
         CycleGameMode,
         OpenCreateGameMaps,
         SelectSessionMap,
@@ -111,6 +117,7 @@ private:
     std::string m_selectedChapterId;
     std::string m_selectedTrainingCourseId;
     int m_iListOffset = 0;
+    int m_iServerBrowserOffset = 0;
     int m_iButtonCount = 0;
     int m_iSelectedButton = 0;
     int m_iBackButtonSlot = -1;

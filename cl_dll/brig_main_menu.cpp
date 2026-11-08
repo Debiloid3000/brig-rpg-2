@@ -22,9 +22,174 @@
 #include "hud.h"
 #include "keydefs.h"
 #include "vgui_int.h"
+#include "common/net_api.h"
+#include <cstdint>
+#include <cstdlib>
 
 namespace
 {
+struct LanBrowserServer
+{
+    std::string address;
+    std::string hostname;
+    std::string map;
+    int players = 0;
+    int maxPlayers = 0;
+    int pingMilliseconds = -1;
+};
+
+struct LanBrowserState
+{
+    std::vector<LanBrowserServer> servers;
+    int requestContext = 0;
+    int nextRequestContext = 7000;
+    bool querying = false;
+    std::string status = "Press Refresh LAN to search your local network.";
+};
+
+LanBrowserState g_lanBrowser;
+CBrigMainMenuPanel* g_pBrigMainMenuPanel = nullptr;
+
+unsigned short HostToNetworkPort(unsigned short port)
+{
+    const std::uint16_t endianProbe = 1;
+    const bool isLittleEndian =
+        *reinterpret_cast<const unsigned char*>(&endianProbe) == 1;
+    if (!isLittleEndian)
+        return port;
+
+    return static_cast<unsigned short>((port << 8) | (port >> 8));
+}
+
+std::string BrowserValue(const char* response, const char* key, const char* fallback)
+{
+    if (!response || !key || !gEngfuncs.pNetAPI ||
+        !gEngfuncs.pNetAPI->ValueForKey)
+        return fallback ? fallback : "";
+
+    const char* value = gEngfuncs.pNetAPI->ValueForKey(response, key);
+    return value && *value ? value : (fallback ? fallback : "");
+}
+
+std::string TruncateBrowserLabel(const std::string& value, std::size_t maxLength)
+{
+    if (value.size() <= maxLength)
+        return value;
+
+    return value.substr(0, maxLength > 3 ? maxLength - 3 : maxLength) + "...";
+}
+
+void NotifyLanBrowserChanged()
+{
+    if (g_pBrigMainMenuPanel)
+        g_pBrigMainMenuPanel->ServerBrowserDataChanged();
+}
+
+void LanServerResponse(net_response_s* response)
+{
+    if (!response || response->context != g_lanBrowser.requestContext)
+        return;
+
+    if (response->error != NET_SUCCESS)
+    {
+        g_lanBrowser.querying = false;
+        if (g_lanBrowser.servers.empty())
+        {
+            g_lanBrowser.status = (response->error & NET_ERROR_TIMEOUT) != 0
+                ? "No LAN servers found."
+                : "LAN search finished without a server response.";
+        }
+        else
+        {
+            g_lanBrowser.status = "Found " +
+                std::to_string(g_lanBrowser.servers.size()) + " LAN server(s).";
+        }
+        NotifyLanBrowserChanged();
+        return;
+    }
+
+    if (response->type != NETAPI_REQUEST_DETAILS || !response->response)
+        return;
+
+    // NETAPI response memory is owned by the engine and is released as soon
+    // as this callback returns. Copy every field before leaving this function.
+    const char* responseText = static_cast<const char*>(response->response);
+    char* addressText = gEngfuncs.pNetAPI && gEngfuncs.pNetAPI->AdrToString
+        ? gEngfuncs.pNetAPI->AdrToString(&response->remote_address)
+        : nullptr;
+
+    if (!addressText || !*addressText)
+        return;
+
+    LanBrowserServer server;
+    server.address = addressText;
+    server.hostname = BrowserValue(responseText, "hostname", server.address.c_str());
+    server.map = BrowserValue(responseText, "map", "Unknown map");
+    server.players = std::max(0, std::atoi(BrowserValue(responseText, "players", "0").c_str()));
+    server.maxPlayers = std::max(0, std::atoi(BrowserValue(responseText, "max", "0").c_str()));
+    server.pingMilliseconds = static_cast<int>(response->ping * 1000.0);
+
+    const auto existing = std::find_if(
+        g_lanBrowser.servers.begin(), g_lanBrowser.servers.end(),
+        [&](const LanBrowserServer& item) { return item.address == server.address; });
+
+    if (existing == g_lanBrowser.servers.end())
+        g_lanBrowser.servers.push_back(server);
+    else
+        *existing = server;
+
+    std::sort(g_lanBrowser.servers.begin(), g_lanBrowser.servers.end(),
+        [](const LanBrowserServer& left, const LanBrowserServer& right)
+        {
+            if (left.pingMilliseconds != right.pingMilliseconds)
+                return left.pingMilliseconds < right.pingMilliseconds;
+            return left.hostname < right.hostname;
+        });
+
+    g_lanBrowser.status = "Searching LAN... found " +
+        std::to_string(g_lanBrowser.servers.size()) + " server(s).";
+    NotifyLanBrowserChanged();
+}
+
+bool StartLanServerSearch()
+{
+    net_api_t* api = gEngfuncs.pNetAPI;
+    if (!api || !api->InitNetworking || !api->SendRequest)
+    {
+        g_lanBrowser.querying = false;
+        g_lanBrowser.status = "This engine does not expose the Legacy server-query API.";
+        NotifyLanBrowserChanged();
+        return false;
+    }
+
+    if (g_lanBrowser.querying && api->CancelRequest)
+        api->CancelRequest(g_lanBrowser.requestContext);
+
+    g_lanBrowser.servers.clear();
+    g_lanBrowser.status = "Searching local network for GoldSrc servers...";
+    g_lanBrowser.querying = true;
+    g_lanBrowser.requestContext = g_lanBrowser.nextRequestContext++;
+    if (g_lanBrowser.nextRequestContext < 7000)
+        g_lanBrowser.nextRequestContext = 7000;
+
+    api->InitNetworking();
+
+    netadr_t broadcastAddress{};
+    broadcastAddress.type = NA_BROADCAST;
+    broadcastAddress.port = HostToNetworkPort(27015);
+
+    api->SendRequest(
+        g_lanBrowser.requestContext,
+        NETAPI_REQUEST_DETAILS,
+        FNETAPI_MULTIPLE_RESPONSE,
+        5.0,
+        &broadcastAddress,
+        LanServerResponse);
+
+    NotifyLanBrowserChanged();
+    return true;
+}
+
 bool GoldSrcKeyToVGuiKey(int keynum, KeyCode& code, bool& printable)
 {
     printable = false;
@@ -575,6 +740,7 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
     : CMenuPanel(0, false, x, y, wide, tall)
 {
     SetMenuID(9001);
+    g_pBrigMainMenuPanel = this;
 
     m_pTitle = new Label("", 0, 0, 480, 32);
     m_pTitle->setParent(this);
@@ -667,6 +833,30 @@ void CBrigMainMenuPanel::ShowMultiplayer()
 {
     m_navigation.Start(BrigMenuNavigation::Page::MultiplayerHub);
     RenderPage();
+}
+
+CBrigMainMenuPanel::~CBrigMainMenuPanel()
+{
+    g_pBrigMainMenuPanel = nullptr;
+    if (g_lanBrowser.querying && gEngfuncs.pNetAPI &&
+        gEngfuncs.pNetAPI->CancelRequest)
+    {
+        gEngfuncs.pNetAPI->CancelRequest(g_lanBrowser.requestContext);
+    }
+
+    g_lanBrowser.querying = false;
+}
+
+void CBrigMainMenuPanel::ServerBrowserDataChanged()
+{
+    if (m_navigation.CurrentPage() == BrigMenuNavigation::Page::ServerBrowser)
+    {
+        const int maxOffset = g_lanBrowser.servers.empty()
+            ? 0
+            : ((static_cast<int>(g_lanBrowser.servers.size()) - 1) / 2) * 2;
+        m_iServerBrowserOffset = std::min(m_iServerBrowserOffset, maxOffset);
+        RenderPage();
+    }
 }
 
 void CBrigMainMenuPanel::Open()
@@ -1197,10 +1387,49 @@ void CBrigMainMenuPanel::RenderPage()
         break;
 
     case Page::ServerBrowser:
+    {
+        pageHasOwnBackButton = true;
         m_pTitle->setText(MenuText("BRIG_Menu_ServerBrowserTitle", "SERVER BROWSER").c_str());
-        m_pBody->setText(BuildUnavailableText("BRIG_Menu_ServerBrowserPending",
-            "The server browser subsystem will be connected in a later stage.").c_str());
+        m_pBody->setText(g_lanBrowser.status.c_str());
+        SetCommandButton(0, ButtonCommand::RefreshLanServers,
+            MenuText("BRIG_Menu_RefreshLan", "Refresh LAN"));
+
+        const int start = std::max(0, m_iServerBrowserOffset);
+        const int end = std::min(
+            static_cast<int>(g_lanBrowser.servers.size()), start + 2);
+        int slot = 1;
+
+        for (int index = start; index < end; ++index)
+        {
+            const LanBrowserServer& server =
+                g_lanBrowser.servers[static_cast<std::size_t>(index)];
+
+            std::string label = TruncateBrowserLabel(server.hostname, 22);
+            label += " | " + TruncateBrowserLabel(server.map, 12);
+            label += " | " + std::to_string(server.players) + "/" +
+                std::to_string(server.maxPlayers);
+            if (server.pingMilliseconds >= 0)
+                label += " | " + std::to_string(server.pingMilliseconds) + "ms";
+
+            SetCommandButton(slot++, ButtonCommand::JoinBrowserServer,
+                label, server.address);
+        }
+
+        if (m_iServerBrowserOffset > 0)
+        {
+            SetCommandButton(3, ButtonCommand::PreviousServerPage,
+                MenuText("BRIG_Menu_Previous", "Previous"));
+        }
+        if (end < static_cast<int>(g_lanBrowser.servers.size()))
+        {
+            SetCommandButton(4, ButtonCommand::NextServerPage,
+                MenuText("BRIG_Menu_Next", "Next"));
+        }
+
+        SetCommandButton(5, ButtonCommand::Back,
+            MenuText("BRIG_Menu_Back", "Back"));
         break;
+    }
 
     case Page::Lobby:
         m_pTitle->setText(MenuText("BRIG_Menu_LobbyTitle", "LOBBY").c_str());
@@ -1616,6 +1845,45 @@ void CBrigMainMenuPanel::ActivateAction(const ButtonAction& action)
         }
         return;
     }
+    case ButtonCommand::RefreshLanServers:
+        m_iServerBrowserOffset = 0;
+        StartLanServerSearch();
+        RenderPage();
+        return;
+    case ButtonCommand::JoinBrowserServer:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        if (!BrigSession::IsValidServerAddress(action.target))
+        {
+            m_pFootnote->setText("The server returned an invalid address; connection was cancelled.");
+            return;
+        }
+
+        session.serverAddress = action.target;
+        if (m_pServerAddressEntry)
+            m_pServerAddressEntry->setText(
+                session.serverAddress.c_str(), static_cast<int>(session.serverAddress.size()));
+
+        if (ConnectDirectToServer(session.serverAddress))
+        {
+            if (gViewPort)
+                gViewPort->HideTopMenu();
+        }
+        else
+        {
+            m_pFootnote->setText(MenuText("BRIG_Menu_ConnectRejected",
+                "Could not connect to the selected server.").c_str());
+        }
+        return;
+    }
+    case ButtonCommand::NextServerPage:
+        m_iServerBrowserOffset += 2;
+        RenderPage();
+        return;
+    case ButtonCommand::PreviousServerPage:
+        m_iServerBrowserOffset = std::max(0, m_iServerBrowserOffset - 2);
+        RenderPage();
+        return;
     case ButtonCommand::CycleGameMode:
     {
         auto& session = BrigSession::GetActiveSessionConfiguration();
