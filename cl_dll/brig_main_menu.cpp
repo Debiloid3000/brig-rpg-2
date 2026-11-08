@@ -359,8 +359,8 @@ void CBrigMainMenuPanel::LayoutControls()
     if (wide <= 0 || tall <= 0)
         return;
 
-    const int panelWidth = std::max(220, std::min(XRES(540), wide - XRES(24)));
-    const int panelHeight = std::max(220, std::min(YRES(420), tall - YRES(24)));
+    const int panelWidth = std::max(220, std::min(static_cast<int>(XRES(540)), wide - static_cast<int>(XRES(24))));
+    const int panelHeight = std::max(220, std::min(static_cast<int>(YRES(420)), tall - static_cast<int>(YRES(24))));
     const int panelX = (wide - panelWidth) / 2;
     const int panelY = (tall - panelHeight) / 2;
     const int inset = XRES(26);
