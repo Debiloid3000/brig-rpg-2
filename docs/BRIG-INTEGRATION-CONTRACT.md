@@ -89,3 +89,13 @@ The existing `mapcycle.txt` remains the server operator's ordering and player-co
 
 
 The engine GameUI overrides are narrowly SHA-256 allowlisted in `tools/validate_brig.py`. Only the exact reviewed versions of `resource/gamemenu.res`, `resource/gameui_english.txt` and `resource/gameui_russian.txt` are accepted; the integrity checks for all other audited resources remain unchanged.
+
+## Campaign catalog and training separation
+
+`game_shared/campaign_catalog.h` derives campaigns and chapters exclusively from Map Catalog records. Story categories are selected through the catalog metadata (`half_life_1`, `blue_shift`, `opposing_force`, and `custom`). Chapter order comes from `brig_chapter_order`; map order inside a chapter comes from `brig_map_order`. The first sorted map of each chapter is its chapter entry point.
+
+`brig_campaign_start` identifies the first map of the whole campaign. It is not a per-chapter flag. Training metadata (`brig_category "training"`, including the legacy `hazard_course` ID) is excluded from story campaigns and surfaced separately through the training-course helpers.
+
+The category filter is metadata filtering only. It must not make an unsupported expansion or gameplay mode appear playable. Every launch path must additionally check the content audit and `BrigGameModeRegistry::IsGameplayReady`.
+
+See [BRIG-CAMPAIGNS.md](BRIG-CAMPAIGNS.md) for the installed-content audit and explicit implementation boundaries.

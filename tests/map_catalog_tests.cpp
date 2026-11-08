@@ -134,20 +134,73 @@ int main()
     assert(IsModeAllowed(hazard, GameMode::CoOp));
     assert(!IsModeAllowed(hazard, GameMode::Deathmatch));
 
-    const auto campaigns = BrigCampaignCatalog::BuildCampaigns({map, hazard}, GameMode::SinglePlayer);
-    assert(campaigns.size() == 2);
-    bool foundHazard = false;
-    for (const auto& campaign : campaigns)
-    {
-        if (campaign.id == "hazard_course")
-        {
-            foundHazard = true;
-            assert(campaign.title == "Hazard Course");
-            assert(campaign.MapCount() == 1);
-            assert(campaign.ChapterCount() == 1);
-        }
-    }
-    assert(foundHazard);
+    MapMetadata mapContinuation = map;
+    mapContinuation.name = "c0a0a";
+    mapContinuation.title = "Black Mesa Inbound continuation";
+    mapContinuation.mapOrder = 2;
+    mapContinuation.campaignStart = false;
+
+    MapMetadata secondChapterMap = map;
+    secondChapterMap.name = "c1a0";
+    secondChapterMap.title = "Anomalous Materials";
+    secondChapterMap.chapterId = "anomalous_materials";
+    secondChapterMap.chapterTitle = "Anomalous Materials";
+    secondChapterMap.chapterOrder = 2;
+    secondChapterMap.mapOrder = 1;
+    secondChapterMap.campaignStart = false;
+
+    MapMetadata hazardContinuation = hazard;
+    hazardContinuation.name = "t0a0a";
+    hazardContinuation.title = "Hazard Course continuation";
+    hazardContinuation.mapOrder = 2;
+    hazardContinuation.campaignStart = false;
+
+    const auto campaigns = BrigCampaignCatalog::BuildCampaigns(
+        {mapContinuation, hazardContinuation, secondChapterMap, map},
+        GameMode::SinglePlayer);
+    assert(campaigns.size() == 1);
+    assert(campaigns[0].id == "half_life");
+    assert(campaigns[0].MapCount() == 3);
+    assert(campaigns[0].ChapterCount() == 2);
+    assert(campaigns[0].StartMap() != nullptr);
+    assert(campaigns[0].StartMap()->name == "c0a0");
+    assert(campaigns[0].chapters[0].id == "black_mesa_inbound");
+    assert(campaigns[0].chapters[0].title == "Black Mesa Inbound");
+    assert(campaigns[0].chapters[0].MapCount() == 2);
+    assert(campaigns[0].chapters[0].StartMap() != nullptr);
+    assert(campaigns[0].chapters[0].StartMap()->name == "c0a0");
+    assert(campaigns[0].chapters[1].id == "anomalous_materials");
+    assert(campaigns[0].chapters[1].StartMap()->name == "c1a0");
+
+    const auto halfLifeOnly = BrigCampaignCatalog::BuildCampaigns(
+        {map, hazard}, GameMode::SinglePlayer, BrigCampaignCatalog::Category::HalfLife1);
+    assert(halfLifeOnly.size() == 1);
+    assert(halfLifeOnly[0].id == "half_life");
+
+    MapMetadata blueShiftMap = map;
+    blueShiftMap.name = "ba_canal1";
+    blueShiftMap.campaignId = "blue_shift";
+    blueShiftMap.campaignTitle = "Blue Shift";
+    blueShiftMap.category = "blue_shift";
+    const auto blueShiftOnly = BrigCampaignCatalog::BuildCampaigns(
+        {blueShiftMap}, GameMode::SinglePlayer, BrigCampaignCatalog::Category::BlueShift);
+    assert(blueShiftOnly.size() == 1);
+    assert(blueShiftOnly[0].id == "blue_shift");
+
+    const auto trainingCourses = BrigCampaignCatalog::BuildTrainingCourses(
+        {hazardContinuation, hazard}, GameMode::SinglePlayer);
+    assert(trainingCourses.size() == 1);
+    assert(trainingCourses[0].id == "hazard_course");
+    assert(trainingCourses[0].title == "Hazard Course");
+    assert(trainingCourses[0].MapCount() == 2);
+    assert(trainingCourses[0].StartMap() != nullptr);
+    assert(trainingCourses[0].StartMap()->name == "t0a0");
+
+    const auto trainingMaps = BrigCampaignCatalog::BuildTrainingMaps(
+        {hazardContinuation, hazard}, GameMode::SinglePlayer);
+    assert(trainingMaps.size() == 2);
+    assert(trainingMaps[0].name == "t0a0");
+    assert(trainingMaps[1].name == "t0a0a");
 
     assert(BrigGameModeRegistry::IsGameplayReady(GameMode::SinglePlayer));
     assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::CoOp));
