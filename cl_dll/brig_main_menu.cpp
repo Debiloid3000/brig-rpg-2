@@ -826,6 +826,21 @@ void CBrigMainMenuPanel::RenderPage()
     using BrigMenuNavigation::Action;
     using BrigMenuNavigation::Page;
 
+    // If a text field owned keyboard focus on the previous page, transfer
+    // focus back to the menu before hiding it. Otherwise hidden inputs would
+    // continue consuming navigation keys when the page changes/reopens.
+    App* app = App::getInstance();
+    if (app)
+    {
+        Panel* focused = app->getFocus();
+        if (focused == m_pServerNameEntry ||
+            focused == m_pPasswordEntry ||
+            focused == m_pServerAddressEntry)
+        {
+            app->requestFocus(m_pTitle);
+        }
+    }
+
     HideButtons();
     m_pBody->setVisible(true);
     m_pServerNameLabel->setVisible(false);
@@ -1437,6 +1452,7 @@ void CBrigMainMenuPanel::HandleKeyInput(bool down, int keynum)
 
     if (keynum == K_ESCAPE || keynum == K_BACKSPACE)
     {
+        CapturePageInputs();
         if (m_navigation.Back())
             RenderPage();
         else if (gViewPort)
