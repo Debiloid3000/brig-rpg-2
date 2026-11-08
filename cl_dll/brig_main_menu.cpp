@@ -273,6 +273,42 @@ const char* CampaignCategoryFallback(BrigCampaignCatalog::Category category)
     }
 }
 
+int CycleServerLimit(int current, const int* values, std::size_t count)
+{
+    if (!values || count == 0)
+        return current;
+
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        if (values[i] == current)
+            return values[(i + 1) % count];
+    }
+
+    return values[0];
+}
+
+void QueueIntegerCvar(const char* name, int value)
+{
+    if (!gEngfuncs.pfnClientCmd || !name || !*name)
+        return;
+
+    char command[96];
+    std::snprintf(command, sizeof(command), "%s %d\n", name, value);
+    gEngfuncs.pfnClientCmd(command);
+}
+
+void QueueMultiplayerSessionSettings(const BrigSession::SessionConfiguration& session)
+{
+    QueueIntegerCvar("mp_timelimit", std::max(0, std::min(session.timeLimitMinutes, 120)));
+    QueueIntegerCvar("mp_fraglimit", std::max(0, std::min(session.fragLimit, 1000)));
+    QueueIntegerCvar("mp_friendlyfire", session.friendlyFire ? 1 : 0);
+    QueueIntegerCvar("mp_falldamage", session.fallDamage ? 1 : 0);
+    QueueIntegerCvar("mp_weaponstay", session.weaponStay ? 1 : 0);
+    QueueIntegerCvar("mp_flashlight", session.flashlight ? 1 : 0);
+    QueueIntegerCvar("mp_allowmonsters", session.allowMonsters ? 1 : 0);
+    QueueIntegerCvar("allow_spectators", session.allowSpectators ? 1 : 0);
+}
+
 BrigCampaignCatalog::Category NextCampaignCategory(BrigCampaignCatalog::Category category)
 {
     using BrigCampaignCatalog::Category;
@@ -417,15 +453,17 @@ bool LaunchConfiguredSession()
     gEngfuncs.pfnClientCmd(hostnameCommand.c_str());
     gEngfuncs.pfnClientCmd(passwordCommand.c_str());
     gEngfuncs.pfnClientCmd(session.lan ? "sv_lan 1\n" : "sv_lan 0\n");
+    QueueMultiplayerSessionSettings(session);
 
     const std::string mapCommand = "map " + session.mapId + "\n";
     gEngfuncs.pfnClientCmd(mapCommand.c_str());
 
     // server.cfg/listenserver.cfg may load defaults during startup. Re-apply
-    // per-session presentation/network values after the map has started.
+    // all session-owned rules once the map has finished loading.
     gEngfuncs.pfnClientCmd(hostnameCommand.c_str());
     gEngfuncs.pfnClientCmd(passwordCommand.c_str());
     gEngfuncs.pfnClientCmd(session.lan ? "sv_lan 1\n" : "sv_lan 0\n");
+    QueueMultiplayerSessionSettings(session);
     return true;
 }
 } // namespace
@@ -899,6 +937,49 @@ void CBrigMainMenuPanel::RenderPage()
             std::string(MenuText("BRIG_Menu_Cheats", "Cheats")) + ": " +
                 MenuText(session.allowCheats ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
                     session.allowCheats ? "Enabled" : "Disabled"));
+        SetCommandButton(2, ButtonCommand::OpenServerSettings,
+            MenuText("BRIG_Menu_ServerSettings", "Server settings"));
+        break;
+    }
+
+    case Page::ServerSettings:
+    {
+        pageHasOwnBackButton = true;
+        m_pTitle->setText(MenuText("BRIG_Menu_ServerSettings", "SERVER SETTINGS").c_str());
+        const auto& session = BrigSession::GetActiveSessionConfiguration();
+        m_pBody->setText(MenuText("BRIG_Menu_ServerSettingsDescription",
+            "These values are applied to Deathmatch and Team Deathmatch listen servers.").c_str());
+
+        const auto toggleLabel = [](const char* token, const char* fallback, bool value)
+        {
+            return std::string(MenuText(token, fallback)) + ": " +
+                MenuText(value ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
+                    value ? "Enabled" : "Disabled");
+        };
+        const auto limitLabel = [](const char* token, const char* fallback, int value)
+        {
+            return std::string(MenuText(token, fallback)) + ": " +
+                (value == 0 ? std::string(MenuText("BRIG_Menu_Off", "Off")) : std::to_string(value));
+        };
+
+        std::vector<MenuEntry> entries;
+        entries.push_back({ButtonCommand::CycleTimeLimit,
+            limitLabel("BRIG_Menu_TimeLimit", "Time limit (minutes)", session.timeLimitMinutes), {}});
+        entries.push_back({ButtonCommand::CycleFragLimit,
+            limitLabel("BRIG_Menu_FragLimit", "Frag limit", session.fragLimit), {}});
+        entries.push_back({ButtonCommand::ToggleFriendlyFire,
+            toggleLabel("BRIG_Menu_FriendlyFire", "Friendly fire", session.friendlyFire), {}});
+        entries.push_back({ButtonCommand::ToggleFallDamage,
+            toggleLabel("BRIG_Menu_FallDamage", "Fall damage", session.fallDamage), {}});
+        entries.push_back({ButtonCommand::ToggleWeaponStay,
+            toggleLabel("BRIG_Menu_WeaponStay", "Weapon stay", session.weaponStay), {}});
+        entries.push_back({ButtonCommand::ToggleFlashlight,
+            toggleLabel("BRIG_Menu_Flashlight", "Flashlight", session.flashlight), {}});
+        entries.push_back({ButtonCommand::ToggleAllowMonsters,
+            toggleLabel("BRIG_Menu_AllowMonsters", "Allow monsters", session.allowMonsters), {}});
+        entries.push_back({ButtonCommand::ToggleSpectators,
+            toggleLabel("BRIG_Menu_Spectators", "Allow spectators", session.allowSpectators), {}});
+        RenderPagedEntries(entries);
         break;
     }
 
@@ -1172,6 +1253,71 @@ void CBrigMainMenuPanel::ActivateAction(const ButtonAction& action)
         if (m_navigation.NavigateTo(BrigMenuNavigation::Page::GameSettings))
             RenderPage();
         return;
+    case ButtonCommand::OpenServerSettings:
+        m_iListOffset = 0;
+        if (m_navigation.NavigateTo(BrigMenuNavigation::Page::ServerSettings))
+            RenderPage();
+        return;
+    case ButtonCommand::CycleTimeLimit:
+    {
+        static const int limits[] = {0, 10, 20, 30, 45, 60};
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.timeLimitMinutes = CycleServerLimit(
+            session.timeLimitMinutes, limits, sizeof(limits) / sizeof(limits[0]));
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::CycleFragLimit:
+    {
+        static const int limits[] = {0, 10, 20, 30, 50, 100};
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.fragLimit = CycleServerLimit(
+            session.fragLimit, limits, sizeof(limits) / sizeof(limits[0]));
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::ToggleFriendlyFire:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.friendlyFire = !session.friendlyFire;
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::ToggleFallDamage:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.fallDamage = !session.fallDamage;
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::ToggleWeaponStay:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.weaponStay = !session.weaponStay;
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::ToggleFlashlight:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.flashlight = !session.flashlight;
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::ToggleAllowMonsters:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.allowMonsters = !session.allowMonsters;
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::ToggleSpectators:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.allowSpectators = !session.allowSpectators;
+        RenderPage();
+        return;
+    }
     case ButtonCommand::CycleGameMode:
     {
         auto& session = BrigSession::GetActiveSessionConfiguration();
