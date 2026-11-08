@@ -257,6 +257,14 @@ int main()
     assert(!defaultSession.allowMonsters);
     assert(!defaultSession.allowSpectators);
 
+    assert(BrigSession::EffectiveTimeLimitMinutes(GameMode::CoOp, 45) == 0);
+    assert(BrigSession::EffectiveFragLimit(GameMode::CoOp, 50) == 0);
+    assert(BrigSession::EffectiveAllowMonsters(GameMode::CoOp, false));
+    assert(BrigSession::EffectiveTimeLimitMinutes(GameMode::Deathmatch, 45) == 45);
+    assert(BrigSession::EffectiveFragLimit(GameMode::TeamDeathmatch, 50) == 50);
+    assert(!BrigSession::EffectiveAllowMonsters(GameMode::Deathmatch, false));
+    assert(BrigSession::EffectiveAllowMonsters(GameMode::TeamDeathmatch, true));
+
     assert(BrigSession::NormalizeDifficulty(0) == 1);
     assert(BrigSession::NormalizeDifficulty(2) == 2);
     assert(BrigSession::NormalizeDifficulty(4) == 3);

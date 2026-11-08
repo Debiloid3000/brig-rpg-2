@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <string>
 
 #include "map_catalog.h"
@@ -38,6 +39,25 @@ struct SessionConfiguration
     bool allowMonsters = false;
     bool allowSpectators = false;
 };
+
+// Co-op is campaign-driven: competitive time/frag limits are disabled and
+// campaign monsters cannot be switched off through the generic session UI.
+inline int EffectiveTimeLimitMinutes(BrigMapCatalog::GameMode mode, int requested)
+{
+    return mode == BrigMapCatalog::GameMode::CoOp
+        ? 0 : std::max(0, std::min(requested, 120));
+}
+
+inline int EffectiveFragLimit(BrigMapCatalog::GameMode mode, int requested)
+{
+    return mode == BrigMapCatalog::GameMode::CoOp
+        ? 0 : std::max(0, std::min(requested, 1000));
+}
+
+inline bool EffectiveAllowMonsters(BrigMapCatalog::GameMode mode, bool requested)
+{
+    return mode == BrigMapCatalog::GameMode::CoOp || requested;
+}
 
 // Validate a classic GoldSrc hostname or IPv4 address, optionally with a
 // decimal port. Delimiters, whitespace and IPv6 literals are rejected because

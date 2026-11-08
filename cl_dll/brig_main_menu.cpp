@@ -563,13 +563,16 @@ void QueueIntegerCvar(const char* name, int value)
 
 void QueueMultiplayerSessionSettings(const BrigSession::SessionConfiguration& session)
 {
-    QueueIntegerCvar("mp_timelimit", std::max(0, std::min(session.timeLimitMinutes, 120)));
-    QueueIntegerCvar("mp_fraglimit", std::max(0, std::min(session.fragLimit, 1000)));
+    QueueIntegerCvar("mp_timelimit",
+        BrigSession::EffectiveTimeLimitMinutes(session.mode, session.timeLimitMinutes));
+    QueueIntegerCvar("mp_fraglimit",
+        BrigSession::EffectiveFragLimit(session.mode, session.fragLimit));
     QueueIntegerCvar("mp_friendlyfire", session.friendlyFire ? 1 : 0);
     QueueIntegerCvar("mp_falldamage", session.fallDamage ? 1 : 0);
     QueueIntegerCvar("mp_weaponstay", session.weaponStay ? 1 : 0);
     QueueIntegerCvar("mp_flashlight", session.flashlight ? 1 : 0);
-    QueueIntegerCvar("mp_allowmonsters", session.allowMonsters ? 1 : 0);
+    QueueIntegerCvar("mp_allowmonsters",
+        BrigSession::EffectiveAllowMonsters(session.mode, session.allowMonsters) ? 1 : 0);
     QueueIntegerCvar("allow_spectators", session.allowSpectators ? 1 : 0);
 }
 
@@ -1358,8 +1361,12 @@ void CBrigMainMenuPanel::RenderPage()
         pageHasOwnBackButton = true;
         m_pTitle->setText(MenuText("BRIG_Menu_ServerSettings", "SERVER SETTINGS").c_str());
         const auto& session = BrigSession::GetActiveSessionConfiguration();
-        m_pBody->setText(MenuText("BRIG_Menu_ServerSettingsDescription",
-            "These values are applied to Deathmatch and Team Deathmatch listen servers.").c_str());
+        const bool coop = session.mode == BrigMapCatalog::GameMode::CoOp;
+        m_pBody->setText(MenuText(coop ? "BRIG_Menu_CoopSettingsDescription" :
+            "BRIG_Menu_ServerSettingsDescription",
+            coop
+                ? "Co-op keeps campaign monsters enabled and uses map triggers instead of time/frag limits."
+                : "These values are applied to Deathmatch and Team Deathmatch listen servers.").c_str());
 
         const auto toggleLabel = [](const char* token, const char* fallback, bool value)
         {
@@ -1374,10 +1381,13 @@ void CBrigMainMenuPanel::RenderPage()
         };
 
         std::vector<MenuEntry> entries;
-        entries.push_back({ButtonCommand::CycleTimeLimit,
-            limitLabel("BRIG_Menu_TimeLimit", "Time limit (minutes)", session.timeLimitMinutes), {}});
-        entries.push_back({ButtonCommand::CycleFragLimit,
-            limitLabel("BRIG_Menu_FragLimit", "Frag limit", session.fragLimit), {}});
+        if (!coop)
+        {
+            entries.push_back({ButtonCommand::CycleTimeLimit,
+                limitLabel("BRIG_Menu_TimeLimit", "Time limit (minutes)", session.timeLimitMinutes), {}});
+            entries.push_back({ButtonCommand::CycleFragLimit,
+                limitLabel("BRIG_Menu_FragLimit", "Frag limit", session.fragLimit), {}});
+        }
         entries.push_back({ButtonCommand::ToggleFriendlyFire,
             toggleLabel("BRIG_Menu_FriendlyFire", "Friendly fire", session.friendlyFire), {}});
         entries.push_back({ButtonCommand::ToggleFallDamage,
@@ -1386,8 +1396,11 @@ void CBrigMainMenuPanel::RenderPage()
             toggleLabel("BRIG_Menu_WeaponStay", "Weapon stay", session.weaponStay), {}});
         entries.push_back({ButtonCommand::ToggleFlashlight,
             toggleLabel("BRIG_Menu_Flashlight", "Flashlight", session.flashlight), {}});
-        entries.push_back({ButtonCommand::ToggleAllowMonsters,
-            toggleLabel("BRIG_Menu_AllowMonsters", "Allow monsters", session.allowMonsters), {}});
+        if (!coop)
+        {
+            entries.push_back({ButtonCommand::ToggleAllowMonsters,
+                toggleLabel("BRIG_Menu_AllowMonsters", "Allow monsters", session.allowMonsters), {}});
+        }
         entries.push_back({ButtonCommand::ToggleSpectators,
             toggleLabel("BRIG_Menu_Spectators", "Allow spectators", session.allowSpectators), {}});
         RenderPagedEntries(entries);
