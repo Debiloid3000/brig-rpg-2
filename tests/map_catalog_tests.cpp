@@ -234,6 +234,15 @@ int main()
         {deathmatchMap}, "crossfire", GameMode::TeamDeathmatch));
 
     const BrigSession::SessionConfiguration defaultSession{};
+    assert(BrigSession::IsValidServerAddress("127.0.0.1"));
+    assert(BrigSession::IsValidServerAddress("127.0.0.1:27015"));
+    assert(BrigSession::IsValidServerAddress("server.example.com:27015"));
+    assert(!BrigSession::IsValidServerAddress(""));
+    assert(!BrigSession::IsValidServerAddress("server.example.com;quit"));
+    assert(!BrigSession::IsValidServerAddress("127.0.0.1:0"));
+    assert(!BrigSession::IsValidServerAddress("127.0.0.1:65536"));
+    assert(!BrigSession::IsValidServerAddress("127.0.0.1:27015 quit"));
+    assert(!BrigSession::IsValidServerAddress("2001:db8::1"));
     assert(defaultSession.serverAddress.empty());
     assert(defaultSession.serverName == "BRIG RPG 2");
     assert(defaultSession.password.empty());

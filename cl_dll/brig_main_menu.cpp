@@ -352,28 +352,9 @@ std::vector<BrigCampaignCatalog::Campaign> GetSelectableCampaigns(
     return campaigns;
 }
 
-bool IsSafeServerAddress(const std::string& address)
-{
-    if (address.empty() || address.size() > 64)
-        return false;
-
-    bool hasAddressCharacter = false;
-    for (unsigned char c : address)
-    {
-        const bool alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-        const bool digit = c >= '0' && c <= '9';
-        const bool punctuation = c == '.' || c == '-' || c == ':' || c == '[' || c == ']';
-        if (!alpha && !digit && !punctuation)
-            return false;
-        hasAddressCharacter = hasAddressCharacter || alpha || digit;
-    }
-
-    return hasAddressCharacter;
-}
-
 bool ConnectDirectToServer(const std::string& address)
 {
-    if (!gEngfuncs.pfnClientCmd || !IsSafeServerAddress(address))
+    if (!gEngfuncs.pfnClientCmd || !BrigSession::IsValidServerAddress(address))
         return false;
 
     const std::string command = "connect " + address + "\n";
@@ -519,6 +500,7 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
     m_pServerNameLabel->setFont(Scheme::sf_primary2);
     m_pServerNameLabel->setFgColor(210, 210, 196, 255);
     m_pServerNameLabel->setContentAlignment(Label::a_west);
+    m_pServerNameLabel->setVisible(false);
 
     m_pServerNameEntry = new TextEntry("", 0, 0, 100, 26);
     m_pServerNameEntry->setParent(this);
@@ -532,6 +514,7 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
     m_pPasswordLabel->setFont(Scheme::sf_primary2);
     m_pPasswordLabel->setFgColor(210, 210, 196, 255);
     m_pPasswordLabel->setContentAlignment(Label::a_west);
+    m_pPasswordLabel->setVisible(false);
 
     m_pPasswordEntry = new TextEntry("", 0, 0, 100, 26);
     m_pPasswordEntry->setParent(this);
@@ -546,6 +529,7 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
     m_pServerAddressLabel->setFont(Scheme::sf_primary2);
     m_pServerAddressLabel->setFgColor(210, 210, 196, 255);
     m_pServerAddressLabel->setContentAlignment(Label::a_west);
+    m_pServerAddressLabel->setVisible(false);
 
     m_pServerAddressEntry = new TextEntry("", 0, 0, 100, 26);
     m_pServerAddressEntry->setParent(this);
