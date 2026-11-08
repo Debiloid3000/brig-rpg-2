@@ -26,6 +26,31 @@ def _safe_console_value(label: str, value: str, max_length: int, allow_empty: bo
     return value
 
 
+def _read_map_manifest(manifest_path: Path) -> set[str]:
+    """Read the authoritative BRIG map list and reject unsafe/duplicate entries."""
+    if not manifest_path.is_file():
+        raise ValueError(f"map catalog is missing: {manifest_path}")
+
+    registered: set[str] = set()
+    for line_number, raw in enumerate(manifest_path.read_text(encoding="utf-8-sig").splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith("//"):
+            continue
+        parts = line.split(None, 1)
+        map_id = parts[0]
+        if not MAP_ID_RE.fullmatch(map_id):
+            raise ValueError(f"{manifest_path}: unsafe map identifier on line {line_number}")
+        if len(parts) > 1 and not parts[1].lstrip().startswith(("#", "//")):
+            raise ValueError(f"{manifest_path}: unexpected data on line {line_number}")
+        normalized = map_id.lower()
+        if normalized in registered:
+            raise ValueError(f"{manifest_path}: duplicate map identifier on line {line_number}")
+        if len(registered) >= 512:
+            raise ValueError(f"{manifest_path}: map catalog exceeds the 512-entry limit")
+        registered.add(normalized)
+    return registered
+
+
 def _read_mode_flag(config_path: Path, key: str) -> bool:
     found: str | None = None
     for line_number, raw in enumerate(config_path.read_text(encoding="utf-8-sig").splitlines(), 1):
@@ -98,6 +123,10 @@ def build_command(
         raise ValueError("mod_dir is missing dlls/hl.dll; build and stage the server DLL first")
 
     normalized_map = map_name.lower()
+    manifest = mod / "maps" / "brig_maplist.txt"
+    registered_maps = _read_map_manifest(manifest)
+    if normalized_map not in registered_maps:
+        raise ValueError(f"map {normalized_map} is not registered in maps/brig_maplist.txt")
     map_file = mod / "maps" / f"{normalized_map}.bsp"
     if not map_file.is_file():
         raise ValueError(f"map BSP is missing: {map_file}")
@@ -121,9 +150,13 @@ def build_command(
     coop = "1" if mode == "coop" else "0"
     teamplay = "1" if mode == "team_deathmatch" else "0"
     lan_value = "1" if lan else "0"
+    # Co-op has no competitive time/frag intermission; campaign triggers progress maps.
+    # Send zero so a server.cfg cannot leave stale competitive limits enabled.
+    effective_time_limit = 0 if mode == "coop" else time_limit_minutes
+    effective_frag_limit = 0 if mode == "coop" else frag_limit
     session_cvars = [
-        ("+mp_timelimit", str(time_limit_minutes)),
-        ("+mp_fraglimit", str(frag_limit)),
+        ("+mp_timelimit", str(effective_time_limit)),
+        ("+mp_fraglimit", str(effective_frag_limit)),
         ("+mp_friendlyfire", "1" if friendly_fire else "0"),
         ("+mp_falldamage", "1" if fall_damage else "0"),
         ("+mp_flashlight", "1" if flashlight else "0"),

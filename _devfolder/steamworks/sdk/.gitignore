@@ -1,0 +1,4 @@
+# Keep the Valve Steamworks SDK local; do not commit its proprietary contents.
+*
+!.gitignore
+!.gitkeep

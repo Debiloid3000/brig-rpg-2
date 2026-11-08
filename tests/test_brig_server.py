@@ -25,6 +25,10 @@ class BrigDedicatedServerTests(unittest.TestCase):
             "brig_coop 1\nbrig_deathmatch 0\nbrig_team_deathmatch 0\n",
             encoding="utf-8",
         )
+        (self.mod / "maps" / "brig_maplist.txt").write_text(
+            "# BRIG map catalog\nc0a0\ncrossfire // registered competitive map\n",
+            encoding="utf-8",
+        )
         (self.mod / "maps" / "crossfire.bsp").write_bytes(b"\x1e\x00\x00\x00" + bytes(124))
         (self.mod / "maps" / "crossfire.cfg").write_text(
             "brig_coop 0\nbrig_deathmatch 1\nbrig_team_deathmatch 1\n",
@@ -45,9 +49,23 @@ class BrigDedicatedServerTests(unittest.TestCase):
         self.assertEqual(command[command.index("+map") + 1], "c0a0")
         self.assertLess(command.index("+coop"), command.index("+map"))
         self.assertGreater(command.index("+hostname", command.index("+map")), command.index("+map"))
-        self.assertEqual(command[command.index("+mp_timelimit") + 1], "20")
+        self.assertEqual(command[command.index("+mp_timelimit") + 1], "0")
         self.assertEqual(command[command.index("+mp_fraglimit") + 1], "0")
         self.assertEqual(command[command.index("+mp_allowmonsters") + 1], "1")
+
+    def test_coop_ignores_competitive_time_and_frag_limits(self):
+        command, _ = build_command(
+            self.hlds, self.mod, map_name="c0a0", mode="coop",
+            time_limit_minutes=90, frag_limit=500,
+        )
+        self.assertEqual(command[command.index("+mp_timelimit") + 1], "0")
+        self.assertEqual(command[command.index("+mp_fraglimit") + 1], "0")
+
+    def test_existing_bsp_and_cfg_are_rejected_when_missing_from_manifest(self):
+        (self.mod / "maps" / "unlisted.bsp").write_bytes(bytes((30, 0, 0, 0)) + bytes(124))
+        (self.mod / "maps" / "unlisted.cfg").write_text("brig_coop 1\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "not registered"):
+            build_command(self.hlds, self.mod, map_name="unlisted")
 
     def test_deathmatch_and_team_deathmatch_require_matching_map_flags(self):
         dm, _ = build_command(self.hlds, self.mod, map_name="crossfire", mode="deathmatch")

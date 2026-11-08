@@ -6,6 +6,24 @@ The multiplayer menu has Lobby and Create Lobby navigation pages, but Steam matc
 
 `pNetAPI` is used only for the existing LAN server browser. It does not create Steam lobbies, list Steam lobbies, invite friends, or join a Steam lobby by ID.
 
+## Local Steamworks SDK setup
+
+Valve's official distribution route is the authenticated [Steamworks SDK portal](https://partner.steamgames.com/doc/sdk). No Valve-owned public GitHub source repository is used by this project. Public repositories labelled as SDK mirrors are third-party mirrors, not an official source of record, so BRIG does not add one as a submodule.
+
+After obtaining access to the Steamworks SDK and accepting Valve's SDK Access Agreement, extract the archive's `sdk` directory to:
+
+```text
+_devfolder/steamworks/sdk/
+  public/steam/steam_api.h
+  public/steam/isteammatchmaking.h
+  redistributable_bin/steam_api.dll
+  redistributable_bin/steam_api.lib
+  redistributable_bin/linux32/libsteam_api.so
+```
+
+Run `py tools/verify_steamworks_sdk.py` to validate the local 32-bit Windows and Linux files required by this Steam Legacy target. The contents of `_devfolder/steamworks/sdk/` are intentionally git-ignored. Do not commit proprietary headers, import libraries, examples, or other SDK source files. Valve's agreement permits local reproduction of the SDK source to develop licensee software and permits redistribution only of the designated `redistributable_bin` files with licensee software in object-code form; it does not make the full SDK open source.
+
+SDK presence is only dependency preparation. It does not prove that a current Steamworks SDK client interface is compatible with the installed Steam Legacy client, nor that a mod loaded inside Half-Life can initialize the expected Steam AppID/interface versions. API initialization, callback pumping, matchmaking calls, game-server association, and Legacy runtime compatibility must be built and tested before Lobby/Create Lobby are marked ready.
 ## Required implementation
 
 1. Add the intended Steamworks SDK dependency for the target runtime and document its version, x86 library, runtime DLL, App ID/test setup, and redistribution constraints. Do not invent interface vtables or copy undocumented ABI layouts.
