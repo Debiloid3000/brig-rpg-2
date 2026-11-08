@@ -2691,6 +2691,40 @@ bool IsSpawnPointValid(CBaseEntity* pPlayer, CBaseEntity* pSpot)
 	return true;
 }
 
+// Co-op spawn points are shared by several clients. Prefer a triggered,
+// non-origin point that is not already occupied, then keep the first usable
+// point as a last resort when every spawn is occupied.
+static CBaseEntity* FindCoOpSpawnPoint(
+	CBaseEntity* pPlayer, const char* className, bool allowOccupiedFallback)
+{
+	CBaseEntity* pSpot = UTIL_FindEntityByClassname(g_pLastSpawn, className);
+	if (FNullEnt(pSpot))
+		pSpot = UTIL_FindEntityByClassname(NULL, className);
+	if (FNullEnt(pSpot))
+		return NULL;
+
+	CBaseEntity* pFirstSpot = pSpot;
+	CBaseEntity* pFallback = NULL;
+
+	do
+	{
+		if (pSpot->pev->origin != Vector(0, 0, 0) && pSpot->IsTriggered(pPlayer))
+		{
+			if (!pFallback)
+				pFallback = pSpot;
+
+			if (IsSpawnPointValid(pPlayer, pSpot))
+				return pSpot;
+		}
+
+		pSpot = UTIL_FindEntityByClassname(pSpot, className);
+		if (FNullEnt(pSpot))
+			pSpot = UTIL_FindEntityByClassname(NULL, className);
+	} while (pSpot != pFirstSpot);
+
+	return allowOccupiedFallback ? pFallback : NULL;
+}
+
 /*
 ============
 EntSelectSpawnPoint
@@ -2707,13 +2741,24 @@ edict_t* EntSelectSpawnPoint(CBaseEntity* pPlayer)
 
 	player = pPlayer->edict();
 
-	// choose a info_player_deathmatch point
-	if (g_pGameRules->IsCoOp())
+	// During a level transition, the named landmark/start spot must win.
+	// Otherwise Co-op cycles through usable shared spawn points without
+	// deliberately placing a player on top of another client.
+	const bool hasStartSpot = !FStringNull(gpGlobals->startspot) &&
+		strlen(STRING(gpGlobals->startspot)) > 0;
+	if (g_pGameRules->IsCoOp() && !hasStartSpot)
 	{
-		pSpot = UTIL_FindEntityByClassname(g_pLastSpawn, "info_player_coop");
-		if (!FNullEnt(pSpot))
-			goto ReturnSpot;
-		pSpot = UTIL_FindEntityByClassname(g_pLastSpawn, "info_player_start");
+		pSpot = FindCoOpSpawnPoint(pPlayer, "info_player_coop", false);
+		if (FNullEnt(pSpot))
+			pSpot = FindCoOpSpawnPoint(pPlayer, "info_player_start", false);
+
+		// No free point remains: use a usable spawn rather than killing a
+		// teammate or returning a null entity.
+		if (FNullEnt(pSpot))
+			pSpot = FindCoOpSpawnPoint(pPlayer, "info_player_coop", true);
+		if (FNullEnt(pSpot))
+			pSpot = FindCoOpSpawnPoint(pPlayer, "info_player_start", true);
+
 		if (!FNullEnt(pSpot))
 			goto ReturnSpot;
 	}
