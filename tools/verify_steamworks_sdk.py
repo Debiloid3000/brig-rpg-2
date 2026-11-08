@@ -29,7 +29,7 @@ def _is_win32_x86_pe(path: Path) -> bool:
         stream.seek(pe_offset)
         pe_header = stream.read(26)
 
-    if len(pe_header) < 26 or pe_header[:4] != b"PE\\0\\0":
+    if len(pe_header) < 26 or pe_header[:4] != b"PE\0\0":
         return False
     machine = int.from_bytes(pe_header[4:6], "little")
     optional_magic = int.from_bytes(pe_header[24:26], "little")
@@ -39,7 +39,7 @@ def _is_win32_x86_pe(path: Path) -> bool:
 def _is_linux_x86_elf(path: Path) -> bool:
     with path.open("rb") as stream:
         header = stream.read(20)
-    if len(header) < 20 or header[:4] != b"\\x7fELF":
+    if len(header) < 20 or header[:4] != b"\x7fELF":
         return False
     elf_class = header[4]
     data_encoding = header[5]
@@ -74,7 +74,7 @@ def verify_sdk(sdk_root: str | Path = DEFAULT_SDK_ROOT) -> dict[str, object]:
     linux_so = root / "redistributable_bin/linux32/libsteam_api.so"
     if not _is_win32_x86_pe(windows_dll):
         raise ValueError("redistributable_bin/steam_api.dll is not a valid 32-bit Windows x86 PE binary")
-    if windows_lib.read_bytes()[:8] != b"!<arch>\\n":
+    if windows_lib.read_bytes()[:8] != b"!<arch>\n":
         raise ValueError("redistributable_bin/steam_api.lib is not a valid COFF archive/import library")
     if not _is_linux_x86_elf(linux_so):
         raise ValueError("redistributable_bin/linux32/libsteam_api.so is not a valid 32-bit Linux i386 ELF binary")
