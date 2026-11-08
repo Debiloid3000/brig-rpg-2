@@ -14,6 +14,7 @@ class CBrigMainMenuPanel final : public CMenuPanel
 {
 public:
     CBrigMainMenuPanel(int x, int y, int wide, int tall);
+    ~CBrigMainMenuPanel();
 
     void ShowPlay();
     void ShowMultiplayer();

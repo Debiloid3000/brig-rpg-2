@@ -162,15 +162,21 @@ bool StartLanServerSearch()
         return false;
     }
 
-    if (g_lanBrowser.querying && api->CancelRequest)
-        api->CancelRequest(g_lanBrowser.requestContext);
+    // Change the context before cancelling so a synchronous or late
+    // callback from the previous request cannot overwrite this search state.
+    const int previousContext = g_lanBrowser.requestContext;
+    const bool hadActiveQuery = g_lanBrowser.querying;
+    g_lanBrowser.querying = false;
+    g_lanBrowser.requestContext = g_lanBrowser.nextRequestContext++;
+    if (g_lanBrowser.nextRequestContext < 7000)
+        g_lanBrowser.nextRequestContext = 7000;
+
+    if (hadActiveQuery && api->CancelRequest)
+        api->CancelRequest(previousContext);
 
     g_lanBrowser.servers.clear();
     g_lanBrowser.status = "Searching local network for GoldSrc servers...";
     g_lanBrowser.querying = true;
-    g_lanBrowser.requestContext = g_lanBrowser.nextRequestContext++;
-    if (g_lanBrowser.nextRequestContext < 7000)
-        g_lanBrowser.nextRequestContext = 7000;
 
     api->InitNetworking();
 
@@ -821,6 +827,28 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
     m_navigation.Start(BrigMenuNavigation::Page::PlayHub);
     setVisible(false);
     LayoutControls();
+}
+
+CBrigMainMenuPanel::~CBrigMainMenuPanel()
+{
+    if (g_pBrigMainMenuPanel != this)
+        return;
+
+    // Invalidate callbacks before cancelling the engine-owned request. A
+    // response that races destruction will then be ignored by its old context.
+    g_pBrigMainMenuPanel = nullptr;
+    if (g_lanBrowser.querying)
+    {
+        const int previousContext = g_lanBrowser.requestContext;
+        g_lanBrowser.querying = false;
+        g_lanBrowser.requestContext = g_lanBrowser.nextRequestContext++;
+        if (g_lanBrowser.nextRequestContext < 7000)
+            g_lanBrowser.nextRequestContext = 7000;
+
+        net_api_t* api = gEngfuncs.pNetAPI;
+        if (api && api->CancelRequest)
+            api->CancelRequest(previousContext);
+    }
 }
 
 void CBrigMainMenuPanel::ShowPlay()
