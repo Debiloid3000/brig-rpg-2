@@ -20,6 +20,7 @@ struct SessionConfiguration
     BrigMapCatalog::GameMode mode = BrigMapCatalog::GameMode::SinglePlayer;
     ConnectionType connectionType = ConnectionType::Local;
     std::string mapId;
+    std::string serverAddress;
     std::string serverName = "BRIG RPG 2";
     std::string password;
     int maxPlayers = 1;

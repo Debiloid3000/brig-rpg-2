@@ -8,6 +8,7 @@
 #include "brig_menu_navigation.h"
 #include "campaign_catalog.h"
 #include "vgui_TeamFortressViewport.h"
+#include <VGUI_TextEntry.h>
 
 class CBrigMainMenuPanel final : public CMenuPanel
 {
@@ -43,6 +44,7 @@ private:
         ToggleFlashlight,
         ToggleAllowMonsters,
         ToggleSpectators,
+        ConnectToServer,
         CycleGameMode,
         OpenCreateGameMaps,
         SelectSessionMap,
@@ -83,6 +85,7 @@ private:
     void ActivateAction(const ButtonAction& action);
     void HideButtons();
     void MoveSelection(int direction);
+    void CapturePageInputs();
     std::string BuildCampaignListText() const;
     std::string BuildCreateGameText() const;
     std::string BuildSessionText() const;
@@ -92,6 +95,14 @@ private:
     Label* m_pTitle = nullptr;
     TextPanel* m_pBody = nullptr;
     Label* m_pFootnote = nullptr;
+    Label* m_pServerNameLabel = nullptr;
+    Label* m_pPasswordLabel = nullptr;
+    Label* m_pServerAddressLabel = nullptr;
+    TextEntry* m_pServerNameEntry = nullptr;
+    TextEntry* m_pPasswordEntry = nullptr;
+    TextEntry* m_pServerAddressEntry = nullptr;
+    bool m_bServerEntriesInitialized = false;
+    bool m_bServerAddressInitialized = false;
     CommandButton* m_pButtons[ButtonCapacity]{};
     ButtonAction m_buttonActions[ButtonCapacity]{};
     BrigCampaignCatalog::Category m_campaignCategory = BrigCampaignCatalog::Category::All;

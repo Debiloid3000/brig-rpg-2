@@ -234,6 +234,9 @@ int main()
         {deathmatchMap}, "crossfire", GameMode::TeamDeathmatch));
 
     const BrigSession::SessionConfiguration defaultSession{};
+    assert(defaultSession.serverAddress.empty());
+    assert(defaultSession.serverName == "BRIG RPG 2");
+    assert(defaultSession.password.empty());
     assert(defaultSession.timeLimitMinutes == 20);
     assert(defaultSession.fragLimit == 0);
     assert(!defaultSession.friendlyFire);
@@ -253,6 +256,9 @@ int main()
 
     auto& session = BrigSession::GetActiveSessionConfiguration();
     session.mode = GameMode::CoOp;
+    session.serverAddress = "127.0.0.1:27015";
+    session.serverName = "Test server";
+    session.password = "test-pass";
     session.maxPlayers = 4;
     session.difficulty = 3;
     session.timeLimitMinutes = 45;
@@ -264,6 +270,9 @@ int main()
     session.allowMonsters = true;
     session.allowSpectators = true;
     assert(BrigSession::GetActiveSessionConfiguration().mode == GameMode::CoOp);
+    assert(BrigSession::GetActiveSessionConfiguration().serverAddress == "127.0.0.1:27015");
+    assert(BrigSession::GetActiveSessionConfiguration().serverName == "Test server");
+    assert(BrigSession::GetActiveSessionConfiguration().password == "test-pass");
     assert(BrigSession::GetActiveSessionConfiguration().maxPlayers == 4);
     assert(BrigSession::GetActiveSessionConfiguration().difficulty == 3);
     assert(BrigSession::GetActiveSessionConfiguration().timeLimitMinutes == 45);
