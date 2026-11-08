@@ -1501,18 +1501,40 @@ void CChangeLevel::ChangeLevelNow(CBaseEntity* pActivator)
 	pev->dmgtime = gpGlobals->time;
 
 
-	// Classic Singleplayer checks the local player. In Co-op, the touch/use
-	// activator is authoritative: a remote client may have touched the trigger,
-	// and a dedicated server has no listen-server local player to query.
+	// Classic Singleplayer checks the local player. Co-op must not rely on a
+	// listen-server local player: touches may come from remote clients and use
+	// activators may be map entities. Pick a player who is actually in the
+	// transition volume; this also works on a dedicated server.
 	CBaseEntity* pPlayer = nullptr;
-	if (g_pGameRules->IsCoOp() && pActivator && pActivator->IsPlayer())
-		pPlayer = pActivator;
-	else
-		pPlayer = UTIL_GetLocalPlayer();
-
-	if (FNullEnt(pPlayer) || !InTransitionVolume(pPlayer, m_szLandmarkName))
+	if (g_pGameRules->IsCoOp())
 	{
-		ALERT(at_aiconsole, "Player isn't in the transition volume %s, aborting\n", m_szLandmarkName);
+		if (pActivator && pActivator->IsPlayer() &&
+			InTransitionVolume(pActivator, m_szLandmarkName))
+		{
+			pPlayer = pActivator;
+		}
+		else
+		{
+			for (int i = 1; i <= gpGlobals->maxClients; ++i)
+			{
+				CBaseEntity* pCandidate = UTIL_PlayerByIndex(i);
+				if (pCandidate && pCandidate->IsPlayer() &&
+					InTransitionVolume(pCandidate, m_szLandmarkName))
+				{
+					pPlayer = pCandidate;
+					break;
+				}
+			}
+		}
+	}
+	else
+	{
+		pPlayer = UTIL_GetLocalPlayer();
+	}
+
+	if (FNullEnt(pPlayer))
+	{
+		ALERT(at_aiconsole, "No player is in the transition volume %s, aborting\n", m_szLandmarkName);
 		return;
 	}
 
