@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "hud.h"
+#include "cl_util.h"
 #include "brig_menu_navigation.h"
 #include "vgui_TeamFortressViewport.h"
 
