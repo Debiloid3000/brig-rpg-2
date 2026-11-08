@@ -7,6 +7,8 @@ BRIG needs the 32-bit Steamworks API headers and redistributables for its Steam 
 3. Extract the archive's `sdk` folder into this directory, so `sdk/public/steam/steam_api.h` and `sdk/redistributable_bin/` exist.
 4. Run `py tools/verify_steamworks_sdk.py` from the repository root.
 
+The SDK verifier checks the Windows DLL is PE32/i386, the Windows import library is an archive, and the Linux shared library is ELF32/i386. It rejects a 64-bit SDK instead of silently accepting it.
+
 The current project expects the 32-bit files `public/steam/steam_api.h`, `public/steam/isteammatchmaking.h`, `redistributable_bin/steam_api.dll`, `redistributable_bin/steam_api.lib`, and `redistributable_bin/linux32/libsteam_api.so`.
 
 ## Why this is not a Git submodule

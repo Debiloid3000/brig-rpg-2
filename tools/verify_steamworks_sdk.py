@@ -18,6 +18,35 @@ REQUIRED_FILES = (
 )
 
 
+def _is_win32_x86_pe(path: Path) -> bool:
+    with path.open("rb") as stream:
+        dos_header = stream.read(64)
+        if len(dos_header) < 64 or dos_header[:2] != b"MZ":
+            return False
+        pe_offset = int.from_bytes(dos_header[0x3C:0x40], "little")
+        if pe_offset < 64:
+            return False
+        stream.seek(pe_offset)
+        pe_header = stream.read(26)
+
+    if len(pe_header) < 26 or pe_header[:4] != b"PE\\0\\0":
+        return False
+    machine = int.from_bytes(pe_header[4:6], "little")
+    optional_magic = int.from_bytes(pe_header[24:26], "little")
+    return machine == 0x014C and optional_magic == 0x010B
+
+
+def _is_linux_x86_elf(path: Path) -> bool:
+    with path.open("rb") as stream:
+        header = stream.read(20)
+    if len(header) < 20 or header[:4] != b"\\x7fELF":
+        return False
+    elf_class = header[4]
+    data_encoding = header[5]
+    machine = int.from_bytes(header[18:20], "little" if data_encoding == 1 else "big")
+    return elf_class == 1 and data_encoding == 1 and machine == 3
+
+
 def verify_sdk(sdk_root: str | Path = DEFAULT_SDK_ROOT) -> dict[str, object]:
     root = Path(sdk_root).expanduser()
     if not root.is_dir():
@@ -39,6 +68,16 @@ def verify_sdk(sdk_root: str | Path = DEFAULT_SDK_ROOT) -> dict[str, object]:
         if empty:
             problems.append("empty files: " + ", ".join(empty))
         raise ValueError("Steamworks SDK is incomplete (" + "; ".join(problems) + ")")
+
+    windows_dll = root / "redistributable_bin/steam_api.dll"
+    windows_lib = root / "redistributable_bin/steam_api.lib"
+    linux_so = root / "redistributable_bin/linux32/libsteam_api.so"
+    if not _is_win32_x86_pe(windows_dll):
+        raise ValueError("redistributable_bin/steam_api.dll is not a valid 32-bit Windows x86 PE binary")
+    if windows_lib.read_bytes()[:8] != b"!<arch>\\n":
+        raise ValueError("redistributable_bin/steam_api.lib is not a valid COFF archive/import library")
+    if not _is_linux_x86_elf(linux_so):
+        raise ValueError("redistributable_bin/linux32/libsteam_api.so is not a valid 32-bit Linux i386 ELF binary")
 
     return {
         "sdk_root": str(root.resolve()),
