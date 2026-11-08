@@ -1,6 +1,6 @@
 # BRIG RPG 2 — Dedicated Server Launcher
 
-The legacy MFC ServerCtrl utility in this repository is an old engine-control sample. It contains a hard-coded D:\\quiver path and is not the BRIG dedicated-server launcher.
+The legacy MFC ServerCtrl utility in this repository is an old engine-control sample. It contains a hard-coded D:\quiver path and is not the BRIG dedicated-server launcher.
 
 ## Required folder layout
 
@@ -25,7 +25,7 @@ The BRIG server DLL must be built and staged into brig/dlls/hl.dll. A map must h
 From the repository root:
 
 ```powershell
-py tools/brig_server.py --hlds "D:\\HLDS\\hlds.exe" --mod-dir "D:\\HLDS\\brig" --mode coop --map c0a0 --max-players 8 --port 27015
+py tools/brig_server.py --hlds "D:\HLDS\\hlds.exe" --mod-dir "D:\HLDS\\brig" --mode coop --map c0a0 --max-players 8 --port 27015
 ```
 
 LAN-only is the default. Add --internet only when the server should accept non-LAN traffic. Add --password for a password-protected server. Use --dry-run to validate paths and print the exact arguments without starting HLDS.

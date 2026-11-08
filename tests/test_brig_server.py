@@ -60,7 +60,7 @@ class BrigDedicatedServerTests(unittest.TestCase):
         )
         self.assertIn("BRIG Co-op Server", command)
         self.assertIn("team pass", command)
-        self.assertEqual(command[command.index("+sv_lan") + 1], "1")
+        self.assertEqual(command[command.index("+sv_lan") + 1], "0")
         self.assertEqual(command[command.index("+sv_lan", command.index("+map")) + 1], "0")
 
     def test_unregistered_or_unsupported_map_mode_is_rejected(self):
