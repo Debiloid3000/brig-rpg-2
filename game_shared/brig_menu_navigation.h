@@ -11,6 +11,7 @@ enum class Page
     CreateGame,
     CreateGameMaps,
     GameSettings,
+    ServerSettings,
     MultiplayerHub,
     ServerBrowser,
     Lobby,

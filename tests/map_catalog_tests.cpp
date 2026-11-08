@@ -233,6 +233,16 @@ int main()
     assert(!BrigGameModeRegistry::CanLaunchMap(
         {deathmatchMap}, "crossfire", GameMode::TeamDeathmatch));
 
+    const BrigSession::SessionConfiguration defaultSession{};
+    assert(defaultSession.timeLimitMinutes == 20);
+    assert(defaultSession.fragLimit == 0);
+    assert(!defaultSession.friendlyFire);
+    assert(!defaultSession.fallDamage);
+    assert(!defaultSession.weaponStay);
+    assert(defaultSession.flashlight);
+    assert(!defaultSession.allowMonsters);
+    assert(!defaultSession.allowSpectators);
+
     assert(BrigSession::NormalizeDifficulty(0) == 1);
     assert(BrigSession::NormalizeDifficulty(2) == 2);
     assert(BrigSession::NormalizeDifficulty(4) == 3);
@@ -245,9 +255,25 @@ int main()
     session.mode = GameMode::CoOp;
     session.maxPlayers = 4;
     session.difficulty = 3;
+    session.timeLimitMinutes = 45;
+    session.fragLimit = 50;
+    session.friendlyFire = true;
+    session.fallDamage = true;
+    session.weaponStay = true;
+    session.flashlight = false;
+    session.allowMonsters = true;
+    session.allowSpectators = true;
     assert(BrigSession::GetActiveSessionConfiguration().mode == GameMode::CoOp);
     assert(BrigSession::GetActiveSessionConfiguration().maxPlayers == 4);
     assert(BrigSession::GetActiveSessionConfiguration().difficulty == 3);
+    assert(BrigSession::GetActiveSessionConfiguration().timeLimitMinutes == 45);
+    assert(BrigSession::GetActiveSessionConfiguration().fragLimit == 50);
+    assert(BrigSession::GetActiveSessionConfiguration().friendlyFire);
+    assert(BrigSession::GetActiveSessionConfiguration().fallDamage);
+    assert(BrigSession::GetActiveSessionConfiguration().weaponStay);
+    assert(!BrigSession::GetActiveSessionConfiguration().flashlight);
+    assert(BrigSession::GetActiveSessionConfiguration().allowMonsters);
+    assert(BrigSession::GetActiveSessionConfiguration().allowSpectators);
     session = BrigSession::SessionConfiguration{};
 
     BrigMenuNavigation::State navigation;
@@ -269,6 +295,10 @@ int main()
     assert(navigation.CurrentPage() == BrigMenuNavigation::Page::CreateGame);
     assert(navigation.Back());
     assert(navigation.Navigate(BrigMenuNavigation::Action::GameSettings));
+    assert(navigation.NavigateTo(BrigMenuNavigation::Page::ServerSettings));
+    assert(navigation.CurrentPage() == BrigMenuNavigation::Page::ServerSettings);
+    assert(navigation.Back());
+    assert(navigation.CurrentPage() == BrigMenuNavigation::Page::GameSettings);
     assert(navigation.Back());
     assert(!navigation.Back());
 

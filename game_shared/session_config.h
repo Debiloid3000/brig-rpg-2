@@ -26,6 +26,16 @@ struct SessionConfiguration
     bool lan = true;
     bool allowCheats = false;
     int difficulty = 2; // GoldSrc skill levels: 1 easy, 2 normal, 3 hard.
+
+    // Legacy multiplayer server rules, applied only to listen-server sessions.
+    int timeLimitMinutes = 20;
+    int fragLimit = 0;
+    bool friendlyFire = false;
+    bool fallDamage = false;
+    bool weaponStay = false;
+    bool flashlight = true;
+    bool allowMonsters = false;
+    bool allowSpectators = false;
 };
 
 inline SessionConfiguration& GetActiveSessionConfiguration()
