@@ -1451,14 +1451,14 @@ void CBrigMainMenuPanel::RenderPage()
 
     case Page::Lobby:
         m_pTitle->setText(MenuText("BRIG_Menu_LobbyTitle", "LOBBY").c_str());
-        m_pBody->setText(BuildUnavailableText("BRIG_Menu_LobbyPending",
-            "The lobby subsystem will be connected in a later stage.").c_str());
+        m_pBody->setText(MenuText("BRIG_Menu_LobbyRequiresSteamworks",
+            "Steam Lobby is unavailable in this build: no Steamworks matchmaking interface is linked. Use Server Browser or Connect to Server instead.").c_str());
         break;
 
     case Page::CreateLobby:
         m_pTitle->setText(MenuText("BRIG_Menu_CreateLobbyTitle", "CREATE LOBBY").c_str());
-        m_pBody->setText(BuildUnavailableText("BRIG_Menu_CreateLobbyPending",
-            "Lobby creation will be connected in a later stage.").c_str());
+        m_pBody->setText(MenuText("BRIG_Menu_CreateLobbyRequiresSteamworks",
+            "Create Lobby is unavailable in this build until Steamworks matchmaking is integrated. Use Create Game for a listen server.").c_str());
         break;
 
     case Page::ConnectServer:
