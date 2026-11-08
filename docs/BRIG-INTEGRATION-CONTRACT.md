@@ -86,3 +86,6 @@ The future client menu should read the same manifest through its initialized Leg
 ### Map rotation
 
 The existing `mapcycle.txt` remains the server operator's ordering and player-count filter, not a second map database. Before a selected entry is accepted, the game checks it against the central catalog and the active DeathMatch or Team DeathMatch availability flag. Unsupported/stale entries are skipped; if player-count filters exclude all otherwise valid entries, the first catalog-approved cycle entry is used. If the cycle has no valid entry, a catalog-approved map for the active mode is selected; if none exists, the server stays on the current map and logs a warning.
+
+
+The engine GameUI overrides are narrowly SHA-256 allowlisted in `tools/validate_brig.py`. Only the exact reviewed versions of `resource/gamemenu.res`, `resource/gameui_english.txt` and `resource/gameui_russian.txt` are accepted; the integrity checks for all other audited resources remain unchanged.

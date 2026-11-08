@@ -13,6 +13,15 @@ from brig_assets import cstring, digest, model_info, pe_check, sprite_check, wav
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# These are intentional, narrowly-scoped BRIG GameUI overrides. The large
+# preserved-resource audit manifest remains the source of all other hashes;
+# these three resources are accepted only at this exact reviewed revision.
+APPROVED_RESOURCE_OVERRIDES = {
+    "resource/gamemenu.res": "83e64c0fbab103db520e857899152a0acd75c25c0ad2ea0804b3f34c21efbc3b",
+    "resource/gameui_english.txt": "e4b337ae811b49ea6aaf8f31690c00aeab69f724540d985bd450974910c6738f",
+    "resource/gameui_russian.txt": "d331658574853d758970162c0d19a5228a4f2d02c14a5273b250ac93c621357a",
+}
+
 # The map manifest is the source of truth for the generated metadata
 # allowlist. Each registered BSP identifier must have exactly one CFG.
 def _map_metadata_paths() -> tuple[str, ...]:
@@ -91,7 +100,8 @@ def validate(mod: Path, manifest: Path, require_dlls: bool = False,
         if path is None:
             errors.append(f"missing resource: {name}")
             continue
-        if digest(path) != record["sha256"]:
+        actual_sha256 = digest(path)
+        if actual_sha256 != record["sha256"] and actual_sha256 != APPROVED_RESOURCE_OVERRIDES.get(name):
             errors.append(f"checksum changed: {name}")
         source = PurePosixPath(record["source"])
         if "need restock" in source.parts and len(source.parts) >= 4 and source.parts[2] in {"cstrike", "cstrike_hd"}:

@@ -13,3 +13,6 @@ The engine-owned main menu is described by `_folder/brig/resource/gamemenu.res`.
 
 The branch provides a menu foundation, not the later campaign launcher, Create Game editor, editable server settings, server browser, or lobby/network implementation. These remain explicit next-stage integrations. Steam Legacy in-game mouse, keyboard and GameUI layering still require manual runtime verification after the Win32 client DLL is built.
 
+
+
+The three engine-owned GameUI resource overrides are checksum-locked in `tools/validate_brig.py`: `resource/gamemenu.res`, `resource/gameui_english.txt` and `resource/gameui_russian.txt`. CI accepts only the exact approved SHA-256 values for these files; other changes still fail the asset audit. The original preservation manifest is left intact.
