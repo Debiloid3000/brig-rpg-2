@@ -15,12 +15,16 @@
 
 BRIG already has `CGameRules`, `CHalfLifeRules`, `CHalfLifeMultiplay` and `CHalfLifeTeamplay`. It also exposes `IsCoOp()`, `IsDeathmatch()` and `IsTeamplay()`.
 
-The mode path has an initial Co-op implementation, but it is deliberately not marked gameplay-ready yet:
+The mode registry exposes the modes whose existing Legacy rules and launch path are wired into Create Game:
 
-1. The generic `CHalfLifeMultiplay::IsCoOp()` reads `gpGlobals->coop`, while the generic `CHalfLifeMultiplay::IsDeathmatch()` still returns `true` unconditionally. The dedicated `CHalfLifeCoOp` rules class reports Co-op and explicitly reports that it is not Deathmatch; the common resolver still checks Co-op first for compatibility with any legacy base-class path.
-2. `InstallGameRules()` now checks `gpGlobals->coop` before the Singleplayer/Deathmatch branch and installs `CHalfLifeCoOp`. That class reuses multiplayer connection, HUD and immediate-respawn infrastructure, but restores the Singleplayer skill profile, allows monsters/flashlight, blocks damage from other players, treats players as allies and awards no player-kill frags. The existing `EntSelectSpawnPoint()` Co-op path now becomes reachable: it tries `info_player_coop` and falls back to `info_player_start`.
+1. Singleplayer uses CHalfLifeRules.
+2. Deathmatch uses the original CHalfLifeMultiplay rules.
+3. Team Deathmatch uses the original CHalfLifeTeamplay rules selected through mp_teamplay.
+4. Co-op has a dedicated CHalfLifeCoOp rules class, but remains gated until its inventory/transition behavior, NPC/scripted-map compatibility and Steam Legacy runtime tests are complete.
 
-This is a gameplay-rules foundation, not a claim that the entire Co-op experience is finished. Inventory persistence, transition/save behavior, map-specific scripted AI, and in-game Steam Legacy verification remain open. The shared mode registry therefore continues to reject Co-op launches from the menu.
+The generic CHalfLifeMultiplay::IsCoOp() reads gpGlobals->coop, while its generic IsDeathmatch() returns true unconditionally. The dedicated CHalfLifeCoOp class reports Co-op and explicitly reports that it is not Deathmatch; the common resolver checks Co-op first. InstallGameRules() checks gpGlobals->coop before the Singleplayer/Deathmatch branch.
+
+Singleplayer, Deathmatch and Team Deathmatch are selectable in Create Game. The UI lists only maps whose installed BSP and map metadata pass the shared catalog/readiness validation. Co-op remains visible as an incomplete mode in status text, but cannot be selected or launched.
 
 ## Central mode feature registry
 
@@ -33,7 +37,7 @@ Implemented in `dlls/gamemode_features.h`:
 | Deathmatch | Yes | Yes | No | Yes | No |
 | Team Deathmatch | Yes | Yes | Yes | Yes | No |
 
-The resolver deliberately checks `IsCoOp()` first. The table is the shared feature contract for mode-specific code; it does **not** claim that every row is fully implemented by the existing game rules. The dedicated Co-op rules now wire the basic friendly-fire, relationship, monster, flashlight, skill-profile and respawn-selection behavior described above. The Barnacle input lock continues to use the same registry. Co-op remains gated in `game_mode_registry.h` until inventory/transition behavior, NPC/scripted-map compatibility and Steam Legacy runtime tests are complete.
+The resolver deliberately checks IsCoOp() first. Singleplayer, Deathmatch and Team Deathmatch now pass the shared readiness gate and can be selected from Create Game. Deathmatch reuses CHalfLifeMultiplay; Team Deathmatch reuses CHalfLifeTeamplay and the existing mp_teamplay server cvar. Their map lists are restricted by each BSP's installed catalog metadata. Co-op remains gated until AI/scripted-map compatibility and Steam Legacy runtime tests are complete.
 
 ### Implemented Co-op-specific behavior
 

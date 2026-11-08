@@ -9,6 +9,7 @@ enum class Page
     PlayHub,
     Singleplayer,
     CreateGame,
+    CreateGameMaps,
     GameSettings,
     MultiplayerHub,
     ServerBrowser,

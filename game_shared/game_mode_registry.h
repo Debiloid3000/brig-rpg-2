@@ -21,10 +21,13 @@ inline const Descriptor& GetDescriptor(BrigMapCatalog::GameMode mode)
         BrigMapCatalog::GameMode::SinglePlayer, "singleplayer", true, "BRIG_Mode_Ready"};
     static const Descriptor coop{
         BrigMapCatalog::GameMode::CoOp, "coop", false, "BRIG_Mode_Coop_Incomplete"};
+    // BRIG already has the original Half-Life multiplayer and teamplay rules.
+    // Create Game now configures them and validates maps through the shared catalog.
+    // Co-op remains gated until its NPC/scripted-map and Legacy runtime audit is done.
     static const Descriptor deathmatch{
-        BrigMapCatalog::GameMode::Deathmatch, "deathmatch", false, "BRIG_Mode_Deathmatch_NextStage"};
+        BrigMapCatalog::GameMode::Deathmatch, "deathmatch", true, "BRIG_Mode_Ready"};
     static const Descriptor teamDeathmatch{
-        BrigMapCatalog::GameMode::TeamDeathmatch, "team_deathmatch", false, "BRIG_Mode_TeamDeathmatch_NextStage"};
+        BrigMapCatalog::GameMode::TeamDeathmatch, "team_deathmatch", true, "BRIG_Mode_Ready"};
 
     switch (mode)
     {

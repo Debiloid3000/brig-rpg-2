@@ -316,6 +316,21 @@ std::vector<BrigCampaignCatalog::Campaign> GetSelectableCampaigns(
     return campaigns;
 }
 
+bool IsSafeConsoleValue(const std::string& value, std::size_t maxLength, bool allowEmpty)
+{
+    if ((!allowEmpty && value.empty()) || value.size() > maxLength)
+        return false;
+
+    for (unsigned char c : value)
+    {
+        // Values are inserted into a quoted GoldSrc console command. Reject
+        // delimiters and escapes rather than trying to reinterpret user text.
+        if (c < 0x20 || c == 0x7f || c == '"' || c == '\\' || c == ';')
+            return false;
+    }
+    return true;
+}
+
 bool LaunchSingleplayerMap(const std::string& mapId)
 {
     if (!gEngfuncs.pfnClientCmd)
@@ -337,6 +352,12 @@ bool LaunchSingleplayerMap(const std::string& mapId)
     session.maxPlayers = 1;
     session.difficulty = BrigSession::NormalizeDifficulty(session.difficulty);
 
+    // Clear stale multiplayer state before loading a Singleplayer map.
+    gEngfuncs.pfnClientCmd("deathmatch 0\n");
+    gEngfuncs.pfnClientCmd("coop 0\n");
+    gEngfuncs.pfnClientCmd("mp_teamplay 0\n");
+    gEngfuncs.pfnClientCmd("maxplayers 1\n");
+
     char skillCommand[32];
     std::snprintf(skillCommand, sizeof(skillCommand), "skill %d\n", session.difficulty);
     gEngfuncs.pfnClientCmd(skillCommand);
@@ -344,6 +365,67 @@ bool LaunchSingleplayerMap(const std::string& mapId)
 
     const std::string mapCommand = "map " + mapId + "\n";
     gEngfuncs.pfnClientCmd(mapCommand.c_str());
+    return true;
+}
+
+bool LaunchConfiguredSession()
+{
+    if (!gEngfuncs.pfnClientCmd)
+        return false;
+
+    auto& session = BrigSession::GetActiveSessionConfiguration();
+    if (session.mode == BrigMapCatalog::GameMode::SinglePlayer)
+        return LaunchSingleplayerMap(session.mapId);
+
+    if (session.mode != BrigMapCatalog::GameMode::Deathmatch &&
+        session.mode != BrigMapCatalog::GameMode::TeamDeathmatch)
+        return false;
+
+    const auto maps = LoadClientMapCatalog();
+    if (!BrigGameModeRegistry::CanLaunchMap(maps, session.mapId, session.mode))
+    {
+        gEngfuncs.Con_DPrintf("BRIG menu: refusing unsupported mode/map '%s'.\n",
+            session.mapId.c_str());
+        return false;
+    }
+
+    if (!IsSafeConsoleValue(session.serverName, 48, false) ||
+        !IsSafeConsoleValue(session.password, 32, true))
+    {
+        gEngfuncs.Con_DPrintf("BRIG menu: server name or password contains unsafe console characters.\n");
+        return false;
+    }
+
+    session.connectionType = BrigSession::ConnectionType::ListenServer;
+    session.maxPlayers = std::max(2, std::min(session.maxPlayers, 32));
+    session.difficulty = BrigSession::NormalizeDifficulty(session.difficulty);
+
+    char command[96];
+    std::snprintf(command, sizeof(command), "maxplayers %d\n", session.maxPlayers);
+    gEngfuncs.pfnClientCmd(command);
+    gEngfuncs.pfnClientCmd("deathmatch 1\n");
+    gEngfuncs.pfnClientCmd("coop 0\n");
+    gEngfuncs.pfnClientCmd(session.mode == BrigMapCatalog::GameMode::TeamDeathmatch
+        ? "mp_teamplay 1\n" : "mp_teamplay 0\n");
+
+    std::snprintf(command, sizeof(command), "skill %d\n", session.difficulty);
+    gEngfuncs.pfnClientCmd(command);
+    gEngfuncs.pfnClientCmd(session.allowCheats ? "sv_cheats 1\n" : "sv_cheats 0\n");
+
+    const std::string hostnameCommand = "hostname \"" + session.serverName + "\"\n";
+    const std::string passwordCommand = "sv_password \"" + session.password + "\"\n";
+    gEngfuncs.pfnClientCmd(hostnameCommand.c_str());
+    gEngfuncs.pfnClientCmd(passwordCommand.c_str());
+    gEngfuncs.pfnClientCmd(session.lan ? "sv_lan 1\n" : "sv_lan 0\n");
+
+    const std::string mapCommand = "map " + session.mapId + "\n";
+    gEngfuncs.pfnClientCmd(mapCommand.c_str());
+
+    // server.cfg/listenserver.cfg may load defaults during startup. Re-apply
+    // per-session presentation/network values after the map has started.
+    gEngfuncs.pfnClientCmd(hostnameCommand.c_str());
+    gEngfuncs.pfnClientCmd(passwordCommand.c_str());
+    gEngfuncs.pfnClientCmd(session.lan ? "sv_lan 1\n" : "sv_lan 0\n");
     return true;
 }
 } // namespace
@@ -754,9 +836,56 @@ void CBrigMainMenuPanel::RenderPage()
     }
 
     case Page::CreateGame:
+    {
         m_pTitle->setText(MenuText("BRIG_Menu_CreateGameTitle", "CREATE GAME").c_str());
         m_pBody->setText(BuildCreateGameText().c_str());
+        const auto& session = BrigSession::GetActiveSessionConfiguration();
+        SetCommandButton(0, ButtonCommand::CycleGameMode,
+            std::string(MenuText("BRIG_Menu_Mode", "Mode")) + ": " +
+                MenuText(ModeToken(session.mode), ModeFallback(session.mode)));
+        SetCommandButton(1, ButtonCommand::OpenCreateGameMaps,
+            std::string(MenuText("BRIG_Menu_Map", "Map")) + ": " +
+                (session.mapId.empty() ? MenuText("BRIG_Menu_NotSelected", "Not selected") : session.mapId));
+        if (session.mode != BrigMapCatalog::GameMode::SinglePlayer)
+        {
+            SetCommandButton(2, ButtonCommand::CycleMaxPlayers,
+                std::string(MenuText("BRIG_Menu_MaxPlayers", "Max players")) + ": " +
+                    std::to_string(session.maxPlayers));
+            SetCommandButton(3, ButtonCommand::ToggleLan,
+                std::string(MenuText("BRIG_Menu_LAN", "LAN")) + ": " +
+                    MenuText(session.lan ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
+                        session.lan ? "Enabled" : "Disabled"));
+            SetCommandButton(4, ButtonCommand::StartConfiguredGame,
+                MenuText("BRIG_Menu_StartGame", "Start game"));
+        }
+        else
+        {
+            SetCommandButton(2, ButtonCommand::StartConfiguredGame,
+                MenuText("BRIG_Menu_StartGame", "Start game"));
+        }
         break;
+    }
+
+    case Page::CreateGameMaps:
+    {
+        pageHasOwnBackButton = true;
+        m_pTitle->setText(MenuText("BRIG_Menu_SelectMapTitle", "SELECT MAP").c_str());
+        const auto maps = LoadClientMapCatalog();
+        const auto mode = BrigSession::GetActiveSessionConfiguration().mode;
+        std::vector<MenuEntry> entries;
+        for (const auto& map : maps)
+        {
+            if (!BrigGameModeRegistry::CanLaunchMap(maps, map.name, mode))
+                continue;
+            const std::string label = map.title + " [" + map.name + "]";
+            entries.push_back({ButtonCommand::SelectSessionMap, label, map.name});
+        }
+        m_pBody->setText(entries.empty()
+            ? MenuText("BRIG_Menu_NoLaunchableMaps", "No launchable maps are available for this mode.").c_str()
+            : MenuText("BRIG_Menu_SelectMap", "Select a map for the session.").c_str());
+        RenderPagedEntries(entries);
+        break;
+    }
 
     case Page::GameSettings:
     {
@@ -887,20 +1016,33 @@ std::string CBrigMainMenuPanel::BuildCampaignListText() const
 
 std::string CBrigMainMenuPanel::BuildCreateGameText() const
 {
-    using BrigMapCatalog::GameMode;
-
-    const GameMode modes[] = {
-        GameMode::SinglePlayer,
-        GameMode::CoOp,
-        GameMode::Deathmatch,
-        GameMode::TeamDeathmatch
-    };
+    const auto& session = BrigSession::GetActiveSessionConfiguration();
+    const auto maps = LoadClientMapCatalog();
+    const auto selected = std::find_if(maps.begin(), maps.end(),
+        [&](const BrigMapCatalog::MapMetadata& map) { return map.name == session.mapId; });
 
     std::ostringstream text;
-    text << MenuText("BRIG_Menu_ModeStatusIntro",
-        "Mode availability in this build:") << "\n";
+    text << MenuText("BRIG_Menu_SessionMode", "Mode") << ": "
+         << MenuText(ModeToken(session.mode), ModeFallback(session.mode)) << "\n";
+    text << MenuText("BRIG_Menu_SessionMap", "Map") << ": "
+         << (selected == maps.end() ? MenuText("BRIG_Menu_NotSelected", "Not selected") : selected->title)
+         << "\n";
+    text << MenuText("BRIG_Menu_SessionConnection", "Connection") << ": "
+         << ConnectionTypeFallback(session.connectionType) << "\n";
+    text << MenuText("BRIG_Menu_SessionPlayers", "Max players") << ": "
+         << session.maxPlayers << "\n";
+    text << MenuText("BRIG_Menu_SessionLan", "LAN") << ": "
+         << MenuText(session.lan ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
+             session.lan ? "Enabled" : "Disabled") << "\n\n";
 
-    for (const GameMode mode : modes)
+    text << MenuText("BRIG_Menu_ModeStatusIntro", "Available game modes:") << "\n";
+    const BrigMapCatalog::GameMode modes[] = {
+        BrigMapCatalog::GameMode::SinglePlayer,
+        BrigMapCatalog::GameMode::CoOp,
+        BrigMapCatalog::GameMode::Deathmatch,
+        BrigMapCatalog::GameMode::TeamDeathmatch
+    };
+    for (const auto mode : modes)
     {
         const auto& descriptor = BrigGameModeRegistry::GetDescriptor(mode);
         text << MenuText(ModeToken(mode), ModeFallback(mode)) << " - "
@@ -908,9 +1050,6 @@ std::string CBrigMainMenuPanel::BuildCreateGameText() const
                  descriptor.gameplayReady ? "Available" : "Not implemented in this stage")
              << "\n";
     }
-
-    text << "\n" << MenuText("BRIG_Menu_CreateGameNextStage",
-        "Mode, map and connection selection will be added in the next stage.");
     return text.str();
 }
 
@@ -1047,6 +1186,66 @@ void CBrigMainMenuPanel::ActivateAction(const ButtonAction& action)
     case ButtonCommand::OpenGameSettings:
         if (m_navigation.NavigateTo(BrigMenuNavigation::Page::GameSettings))
             RenderPage();
+        return;
+    case ButtonCommand::CycleGameMode:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        using BrigMapCatalog::GameMode;
+        const GameMode modes[] = {GameMode::SinglePlayer, GameMode::Deathmatch, GameMode::TeamDeathmatch};
+        int current = 0;
+        for (int i = 0; i < 3; ++i)
+            if (modes[i] == session.mode) current = i;
+        session.mode = modes[(current + 1) % 3];
+        session.connectionType = session.mode == GameMode::SinglePlayer
+            ? BrigSession::ConnectionType::Local : BrigSession::ConnectionType::ListenServer;
+        session.maxPlayers = session.mode == GameMode::SinglePlayer ? 1 : std::max(2, session.maxPlayers);
+        const auto maps = LoadClientMapCatalog();
+        if (!BrigGameModeRegistry::CanLaunchMap(maps, session.mapId, session.mode))
+            session.mapId.clear();
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::OpenCreateGameMaps:
+        m_iListOffset = 0;
+        if (m_navigation.NavigateTo(BrigMenuNavigation::Page::CreateGameMaps))
+            RenderPage();
+        return;
+    case ButtonCommand::SelectSessionMap:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.mapId = action.target;
+        m_iListOffset = 0;
+        if (m_navigation.Back())
+            RenderPage();
+        return;
+    }
+    case ButtonCommand::CycleMaxPlayers:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        const int current = std::max(2, std::min(session.maxPlayers, 32));
+        session.maxPlayers = current >= 32 ? 2 : current <= 2 ? 4 : current <= 4 ? 8 : current <= 8 ? 16 : 32;
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::ToggleLan:
+    {
+        auto& session = BrigSession::GetActiveSessionConfiguration();
+        session.lan = !session.lan;
+        RenderPage();
+        return;
+    }
+    case ButtonCommand::StartConfiguredGame:
+        if (LaunchConfiguredSession())
+        {
+            if (gViewPort)
+                gViewPort->HideTopMenu();
+        }
+        else
+        {
+            m_pFootnote->setText(MenuText("BRIG_Menu_LaunchRejected",
+                "Cannot start this session: choose a supported map and check the session settings.").c_str());
+            gEngfuncs.Con_DPrintf("BRIG menu: configured session launch was rejected.\n");
+        }
         return;
     case ButtonCommand::OpenCampaign:
         m_selectedCampaignId = action.target;

@@ -218,8 +218,20 @@ int main()
 
     assert(BrigGameModeRegistry::IsGameplayReady(GameMode::SinglePlayer));
     assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::CoOp));
-    assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::Deathmatch));
-    assert(!BrigGameModeRegistry::IsGameplayReady(GameMode::TeamDeathmatch));
+    assert(BrigGameModeRegistry::IsGameplayReady(GameMode::Deathmatch));
+    assert(BrigGameModeRegistry::IsGameplayReady(GameMode::TeamDeathmatch));
+
+    MapMetadata deathmatchMap = MakeDefaultMetadata("crossfire");
+    deathmatchMap.singleplayer = false;
+    deathmatchMap.deathmatch = true;
+    deathmatchMap.teamDeathmatch = true;
+    assert(BrigGameModeRegistry::CanLaunchMap(
+        {deathmatchMap}, "crossfire", GameMode::Deathmatch));
+    assert(BrigGameModeRegistry::CanLaunchMap(
+        {deathmatchMap}, "crossfire", GameMode::TeamDeathmatch));
+    deathmatchMap.teamDeathmatch = false;
+    assert(!BrigGameModeRegistry::CanLaunchMap(
+        {deathmatchMap}, "crossfire", GameMode::TeamDeathmatch));
 
     assert(BrigSession::NormalizeDifficulty(0) == 1);
     assert(BrigSession::NormalizeDifficulty(2) == 2);
