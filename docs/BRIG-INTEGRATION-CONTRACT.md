@@ -56,9 +56,11 @@ The menu consumes shared data rather than maintaining parallel lists:
 - `campaign_catalog.h` derives campaign groups from Map Catalog records.
 - `game_mode_registry.h` shares the same `GameMode` enum used by the game-rules feature registry and reports launch readiness.
 - `session_config.h` owns one client-side `SessionConfiguration` object; menu pages read it, and future settings controls must update it rather than create another copy.
-- Server Browser, Lobby, Create Lobby and Connect have real navigation routes but report their unimplemented network status until those subsystems are built.
+- Server Browser performs Steam Legacy LAN broadcast discovery through the engine `pNetAPI`, copies transient response data before the engine releases it, sorts/paginates discovered servers and joins through the validated connection path. It does not claim to enumerate public Internet servers: the legacy GoldSrc master-server service is unavailable. Direct Connect validates a host/IP and optional port before issuing the engine `connect` command. Lobby and Create Lobby navigation exists, but Steam Lobby/party creation is not implemented.
 
-The Singleplayer VGUI path now navigates category → campaign → chapter/map, exposes a campaign-wide map list and keeps Training courses separate. Before launch, the client reloads the same central catalog and accepts only a safe map ID that resolves to an existing GoldSrc BSP v30, has Singleplayer enabled, belongs to a gameplay-ready mode, and is not tagged as an unsupported Blue Shift/Opposing Force expansion. The launch helper queues the selected GoldSrc difficulty (`skill 1`, `skill 2`, or `skill 3`) and the cheats preference before the map command. This command sequence and server-side result remain subject to manual Steam Legacy runtime validation. Create Game editing, editable multiplayer server settings and network actions remain later stages.
+The Singleplayer VGUI path navigates category → campaign → chapter/map, exposes a campaign-wide map list and keeps Training courses separate. Before launch, the client reloads the central catalog and accepts only a safe map ID that resolves to an existing GoldSrc BSP v30, has Singleplayer enabled, belongs to a gameplay-ready mode and is not tagged as an unsupported Blue Shift/Opposing Force expansion. The launch helper queues the selected GoldSrc difficulty (`skill 1`, `skill 2` or `skill 3`) and the cheats preference before the map command.
+
+Create Game now edits the shared session model and launches supported listen-server Deathmatch and Team Deathmatch sessions with max players, LAN, hostname, password and the exposed Legacy server-rule CVARs. The menu also exposes the shared Server Settings page and validated Direct Connect. Server Browser is LAN-only through the Steam Legacy `pNetAPI`; public Internet master-server discovery is not available. Steam Lobby/Create Lobby and dedicated-server process management remain unfinished. The command sequence and actual server-side result still require manual Steam Legacy runtime validation.
 
 ## Unified map catalog
 
@@ -73,7 +75,7 @@ The server-side catalog implementation is shared through `game_shared/map_catalo
 
 The debug/administration commands `brig_mapcatalog_reload` and `brig_mapcatalog_list` refresh and inspect that same list. The existing `sv_load_all_maps` diagnostic now uses the registered catalog and preserves manifest order. The engine filesystem's `FindFirst/FindNext` BSP enumeration is only a compatibility fallback when `maps/brig_maplist.txt` is missing or unreadable.
 
-The future client menu should read the same manifest through its initialized Legacy-compatible `IFileSystem`, then use the shared parser from `game_shared/map_catalog.h` for IDs and per-map CFG metadata. It must not invent a separate campaign list or assume that an installed BSP implies support for a campaign's entities/resources.
+The client menu reads the same manifest through its initialized Legacy-compatible filesystem and uses the shared parser from `game_shared/map_catalog.h` for IDs and per-map CFG metadata. It does not maintain a parallel campaign/map list. The game-DLL-side catalog remains authoritative for server map rotation and multiplayer map eligibility; installing a BSP alone does not prove that its campaign entities/resources are supported.
 
 ### Map/session ownership
 
