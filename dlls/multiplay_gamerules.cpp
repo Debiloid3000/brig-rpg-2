@@ -485,12 +485,18 @@ void CHalfLifeMultiplay::PlayerSpawn(CBasePlayer* pPlayer)
 
 	pPlayer->SetHasSuit(true);
 
-	addDefault = true;
+	// A Co-op respawn must not duplicate the player's retained loadout or
+	// replay map equipment. First spawn (or an empty inventory) still receives
+	// the normal map-defined/default starting equipment.
+	addDefault = !IsCoOp() || !pPlayer->HasWeapons();
 
-	while (pWeaponEntity = UTIL_FindEntityByClassname(pWeaponEntity, "game_player_equip"))
+	if (addDefault)
 	{
-		pWeaponEntity->Touch(pPlayer);
-		addDefault = false;
+		while (pWeaponEntity = UTIL_FindEntityByClassname(pWeaponEntity, "game_player_equip"))
+		{
+			pWeaponEntity->Touch(pPlayer);
+			addDefault = false;
+		}
 	}
 
 	if (addDefault)
@@ -498,6 +504,16 @@ void CHalfLifeMultiplay::PlayerSpawn(CBasePlayer* pPlayer)
 		pPlayer->GiveNamedItem("weapon_crowbar");
 		pPlayer->GiveNamedItem("weapon_9mmhandgun");
 		pPlayer->GiveAmmo(68, "9mm", _9MM_MAX_CARRY); // 4 full reloads
+	}
+	else if (IsCoOp())
+	{
+		// Killed() holsters the active item. Re-deploy it after respawn so the
+		// preserved weapon is immediately usable again.
+		if (!pPlayer->m_pActiveItem ||
+			!pPlayer->m_pActiveItem->Deploy())
+		{
+			GetNextBestWeapon(pPlayer, pPlayer->m_pActiveItem, true);
+		}
 	}
 
 	pPlayer->m_iAutoWepSwitch = originalAutoWepSwitch;

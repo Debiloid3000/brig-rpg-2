@@ -42,8 +42,11 @@ The resolver deliberately checks `IsCoOp()` first. The table is the shared featu
 - Damage from another player is rejected; self-damage and damage from monsters/world entities retain the base behavior. Player-to-player relationship queries return `GR_TEAMMATE`.
 - The existing `EntSelectSpawnPoint()` logic is now activated by the Co-op rules: it searches `info_player_coop` first and falls back to `info_player_start` when a map has no dedicated Co-op spawn.
 - When a Co-op player is captured by a Barnacle and has `PFLAG_ONBARNACLE`, BRIG skips item pre-frame and post-frame processing so the captured player cannot use their held item. Existing release handling clears the flag when the Barnacle is killed; player spawn also resets the physics flags.
+- Co-op death does not create a temporary weapon box or strip the player's inventory. Weapon entity links and ammo remain intact, and the active weapon is deployed again on respawn.
+- Co-op spawn preserves ammo after the first spawn. The first spawn still initializes an empty inventory before map equipment/default items are granted.
+- A restored Co-op player is marked as having initialized inventory after the existing Legacy PLAYER save fields have been read; no existing save-field layout was changed.
 
-This does not yet preserve the full inventory across player death or map transitions, validate every scripted NPC relationship, or prove that all campaign maps behave correctly in Co-op.
+Co-op death/respawn now keeps the player's weapon entities and ammunition attached to the player instead of packing them into a temporary weapon box or clearing them. The previous active weapon is deployed again after respawn, and the normal map/default loadout is granted only when the player has no retained weapons. The existing Legacy PLAYER save table already serializes weapon pointers and ammo; a successful Co-op restore marks the runtime inventory as initialized without changing the save-field layout. This still needs Steam Legacy runtime verification, including map-change transitions, disconnect/reconnect behavior, and scripted AI.
 
 ### Implemented general Half-Life bug fix
 
@@ -58,7 +61,7 @@ This does not yet preserve the full inventory across player death or map transit
 | Original Barnacle entity logic | BRIG `dlls/barnacle.cpp` | Singleplayer baseline; shared NPC | BRIG's file is byte-identical to Half-Life Updated at the inspected revision | **Kept; no unnecessary replacement** |
 | Co-op spawn-point selection (`info_player_coop`) | Existing Legacy player spawn selector | Co-op | Reuses the original Game-DLL selector; tries `info_player_coop`, then `info_player_start` | **Applied; needs runtime test** |
 | Co-op friendly fire and player relationships | BRIG `CHalfLifeCoOp` rules | Co-op | Game-DLL rule overrides; no engine API change | **Applied; needs runtime test** |
-| Co-op respawn and inventory persistence | Existing multiplayer respawn + future save/transition work | Co-op | Immediate respawn is inherited from multiplayer rules; inventory/transition persistence still requires explicit design | **Partial; inventory persistence deferred** |
+| Co-op respawn and inventory persistence | BRIG Co-op player rules + existing Legacy player save/restore fields | Co-op | Immediate respawn is inherited from multiplayer rules; no new save fields are added | **Death/respawn implemented; map-transition/runtime validation pending** |
 | NPC classifications, allied behavior and scripted AI | Unified SDK / Sven Co-op documentation | Co-op where appropriate; otherwise all modes | Individual NPC/AI changes may be portable; blanket replacement risks changing map scripts | Audit per entity |
 | Weapon, item and ammo respawn | Existing BRIG multiplayer rules; Unified SDK configurable rules | DM/TDM; selected Co-op maps only | Game-DLL logic | Existing multiplayer baseline; not generalized yet |
 | Team relationships and friendly fire | BRIG `CHalfLifeTeamplay`; Unified SDK teamplay | TDM | Game-DLL logic | Existing TDM baseline; keep separate from Co-op |

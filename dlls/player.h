@@ -353,6 +353,10 @@ public:
 
 	bool m_bRestored;
 
+	// Runtime-only marker: the first Co-op spawn has initialized this player's inventory.
+	// Weapon pointers and ammo continue to use the existing Legacy save fields.
+	bool m_bCoOpInventoryInitialized = false;
+
 	//True if the player is currently spawning.
 	bool m_bIsSpawning = false;
 };

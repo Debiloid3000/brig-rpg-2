@@ -587,6 +587,13 @@ bool CBasePlayer::TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, fl
 //=========================================================
 void CBasePlayer::PackDeadPlayerItems()
 {
+	// Co-op inventory belongs to the player, not to a temporary death weaponbox.
+	// Keep weapon entities linked to the player and leave all ammo untouched.
+	if (g_pGameRules && g_pGameRules->IsCoOp())
+	{
+		return;
+	}
+
 	int iWeaponRules;
 	int iAmmoRules;
 	int i;
@@ -2871,11 +2878,19 @@ void CBasePlayer::Spawn()
 	m_pClientActiveItem = NULL;
 	m_iClientBattery = -1;
 
-	// reset all ammo values to 0
+	// Co-op keeps the inventory through death/respawn. The first spawn still
+	// starts with empty ammo; subsequent spawns retain the restored/live values.
+	const bool keepCoOpAmmo = g_pGameRules && g_pGameRules->IsCoOp() &&
+		m_bCoOpInventoryInitialized;
 	for (int i = 0; i < MAX_AMMO_SLOTS; i++)
 	{
-		m_rgAmmo[i] = 0;
-		m_rgAmmoLast[i] = 0; // client ammo values also have to be reset  (the death hud clear messages does on the client side)
+		if (!keepCoOpAmmo)
+		{
+			m_rgAmmo[i] = 0;
+		}
+
+		// Force the client HUD to refresh from the authoritative server values.
+		m_rgAmmoLast[i] = 0;
 	}
 
 	m_lastx = m_lasty = 0;
@@ -2883,6 +2898,15 @@ void CBasePlayer::Spawn()
 	m_flNextChatTime = gpGlobals->time;
 
 	g_pGameRules->PlayerSpawn(this);
+
+	if (g_pGameRules && g_pGameRules->IsCoOp())
+	{
+		m_bCoOpInventoryInitialized = true;
+	}
+	else
+	{
+		m_bCoOpInventoryInitialized = false;
+	}
 }
 
 
@@ -2937,6 +2961,13 @@ bool CBasePlayer::Restore(CRestore& restore)
 		return false;
 
 	bool status = restore.ReadFields("PLAYER", this, m_playerSaveData, ARRAYSIZE(m_playerSaveData));
+
+	// The existing PLAYER save table already restores weapon links and ammunition.
+	// Mark the restored inventory as initialized without changing the save format.
+	if (status && g_pGameRules && g_pGameRules->IsCoOp())
+	{
+		m_bCoOpInventoryInitialized = true;
+	}
 
 	SAVERESTOREDATA* pSaveData = (SAVERESTOREDATA*)gpGlobals->pSaveData;
 	// landmark isn't present.
