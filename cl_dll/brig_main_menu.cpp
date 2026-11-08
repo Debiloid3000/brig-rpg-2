@@ -12,6 +12,7 @@
 #include <VGUI_TextPanel.h>
 #include <VGUI_App.h>
 #include <VGUI_KeyCode.h>
+#include <VGUI_Scheme.h>
 
 #include "cl_util.h"
 #include "campaign_catalog.h"
@@ -594,9 +595,14 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
     m_pServerNameLabel->setContentAlignment(Label::a_west);
     m_pServerNameLabel->setVisible(false);
 
+    Font* textEntryFont = nullptr;
+    if (App::getInstance() && App::getInstance()->getScheme())
+        textEntryFont = App::getInstance()->getScheme()->getFont(Scheme::sf_primary2);
+
     m_pServerNameEntry = new TextEntry("", 0, 0, 100, 26);
     m_pServerNameEntry->setParent(this);
-    m_pServerNameEntry->setFont(Scheme::sf_primary2);
+    if (textEntryFont)
+            m_pServerNameEntry->setFont(textEntryFont);
     m_pServerNameEntry->setFgColor(230, 230, 220, 255);
     m_pServerNameEntry->setBgColor(25, 25, 25, 255);
     m_pServerNameEntry->setVisible(false);
@@ -610,7 +616,8 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
 
     m_pPasswordEntry = new TextEntry("", 0, 0, 100, 26);
     m_pPasswordEntry->setParent(this);
-    m_pPasswordEntry->setFont(Scheme::sf_primary2);
+    if (textEntryFont)
+            m_pPasswordEntry->setFont(textEntryFont);
     m_pPasswordEntry->setFgColor(230, 230, 220, 255);
     m_pPasswordEntry->setBgColor(25, 25, 25, 255);
     m_pPasswordEntry->setTextHidden(true);
@@ -625,7 +632,8 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
 
     m_pServerAddressEntry = new TextEntry("", 0, 0, 100, 26);
     m_pServerAddressEntry->setParent(this);
-    m_pServerAddressEntry->setFont(Scheme::sf_primary2);
+    if (textEntryFont)
+            m_pServerAddressEntry->setFont(textEntryFont);
     m_pServerAddressEntry->setFgColor(230, 230, 220, 255);
     m_pServerAddressEntry->setBgColor(25, 25, 25, 255);
     m_pServerAddressEntry->setVisible(false);
