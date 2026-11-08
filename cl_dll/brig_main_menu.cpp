@@ -504,16 +504,16 @@ std::string CBrigMainMenuPanel::BuildCampaignListText() const
     }
 
     text << MenuText("BRIG_Menu_CampaignIntro",
-        "Campaigns registered in the shared map catalog:") << "\\n";
+        "Campaigns registered in the shared map catalog:") << "\n";
 
     for (const auto& campaign : campaigns)
     {
-        text << campaign.title << "\\n";
+        text << campaign.title << "\n";
 
         if (campaign.chapters.empty())
         {
             for (const auto& map : campaign.maps)
-                text << "  " << map.title << " [" << map.name << "]\\n";
+                text << "  " << map.title << " [" << map.name << "]\n";
             continue;
         }
 
@@ -525,24 +525,24 @@ std::string CBrigMainMenuPanel::BuildCampaignListText() const
             if (startMap)
                 text << " [" << startMap->title << " / " << startMap->name << "]";
 
-            text << "\\n";
+            text << "\n";
         }
     }
 
     if (!trainingCourses.empty())
     {
-        text << "\\n" << MenuText("BRIG_Menu_Training", "Training") << ":\\n";
+        text << "\n" << MenuText("BRIG_Menu_Training", "Training") << ":\n";
         for (const auto& course : trainingCourses)
         {
             const auto* startMap = course.StartMap();
             text << "  " << course.title;
             if (startMap)
                 text << " [" << startMap->name << "]";
-            text << "\\n";
+            text << "\n";
         }
     }
 
-    text << "\\n" << MenuText("BRIG_Menu_CampaignNextStage",
+    text << "\n" << MenuText("BRIG_Menu_CampaignNextStage",
         "Chapter selection and campaign launch will be connected in the next stage.");
     return text.str();
 }
