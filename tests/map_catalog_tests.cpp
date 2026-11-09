@@ -218,6 +218,22 @@ int main()
     assert(trainingMaps[0].name == "t0a0");
     assert(trainingMaps[1].name == "t0a0a");
 
+    // Hazard Course remains separate from story chapters but its maps are
+    // also selectable in Create Game when Co-op is the chosen session mode.
+    const auto coopTrainingCourses = BrigCampaignCatalog::BuildTrainingCourses(
+        {hazardContinuation, hazard}, GameMode::CoOp);
+    assert(coopTrainingCourses.size() == 1);
+    assert(coopTrainingCourses[0].id == "hazard_course");
+    assert(coopTrainingCourses[0].MapCount() == 2);
+
+    const auto coopTrainingMaps = BrigCampaignCatalog::BuildTrainingMaps(
+        {hazardContinuation, hazard}, GameMode::CoOp);
+    assert(coopTrainingMaps.size() == 2);
+    assert(coopTrainingMaps[0].name == "t0a0");
+    assert(coopTrainingMaps[1].name == "t0a0a");
+    assert(BrigGameModeRegistry::CanLaunchMap(
+        {hazard}, "t0a0", GameMode::CoOp));
+
     assert(BrigGameModeRegistry::IsGameplayReady(GameMode::SinglePlayer));
     assert(BrigGameModeRegistry::IsGameplayReady(GameMode::CoOp));
     assert(BrigGameModeRegistry::IsGameplayReady(GameMode::Deathmatch));

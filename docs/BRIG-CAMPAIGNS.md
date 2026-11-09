@@ -38,7 +38,7 @@ The regular chapter view uses chapter titles from `brig_chapter_title`; it does 
 
 ## Training is separate
 
-Maps whose category is `training` (or whose campaign ID is the legacy `hazard_course`) are excluded from the story-campaign groups. They are exposed through `BuildTrainingCourses` / `BuildTrainingMaps` and are presented under a separate Training section.
+Maps whose category is `training` (or whose campaign ID is the legacy `hazard_course`) are excluded from the story-campaign groups. They are exposed through `BuildTrainingCourses` / `BuildTrainingMaps` and are presented under a separate Training section. The Singleplayer Training page uses Singleplayer eligibility. The same 7 Hazard Course map records are marked `brig_coop 1` and can be selected from Create Game's Co-op map picker; this declaration does not certify every map's custom scripts or multiplayer transitions.
 
 The installed metadata currently registers Hazard Course as training content beginning at `t0a0`. Its continuation maps are part of the same training course, not extra numbered story chapters.
 
