@@ -28,6 +28,37 @@ def make_elf32_i386() -> bytes:
     return bytes(data)
 
 
+def make_import_member(machine: int) -> bytes:
+    # IMPORT_OBJECT_HEADER: Sig1, Sig2, Version, Machine, timestamp,
+    # data size, ordinal/hint, and type information.
+    fields = (0, 0xFFFF, 0, machine, 0, 0, 0, 0)
+    sizes = (2, 2, 2, 2, 4, 4, 2, 2)
+    return b"".join(value.to_bytes(size, "little") for value, size in zip(fields, sizes))
+
+
+def make_coff_archive(machine: int) -> bytes:
+    members = [
+        ("/", b"\x00\x00\x00\x00"),  # linker index (not a COFF object)
+        ("steam_api.dll/", make_import_member(machine)),
+    ]
+    archive = bytearray(b"!<arch>\n")
+    for name, payload in members:
+        header = (
+            name.encode("ascii").ljust(16, b" ")
+            + b"0".ljust(12, b" ")
+            + b"0".ljust(6, b" ")
+            + b"0".ljust(6, b" ")
+            + b"100644".ljust(8, b" ")
+            + str(len(payload)).encode("ascii").ljust(10, b" ")
+            + b"`\n"
+        )
+        archive.extend(header)
+        archive.extend(payload)
+        if len(payload) & 1:
+            archive.extend(b"\n")
+    return bytes(archive)
+
+
 class SteamworksSdkSetupTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -43,7 +74,7 @@ class SteamworksSdkSetupTests(unittest.TestCase):
             if relative == Path("redistributable_bin/steam_api.dll"):
                 target.write_bytes(make_pe32_x86())
             elif relative == Path("redistributable_bin/steam_api.lib"):
-                target.write_bytes(b"!<arch>\n")
+                target.write_bytes(make_coff_archive(0x014C))
             elif relative == Path("redistributable_bin/linux32/libsteam_api.so"):
                 target.write_bytes(make_elf32_i386())
             else:
@@ -67,13 +98,27 @@ class SteamworksSdkSetupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "isteammatchmaking.h"):
             verify_sdk(self.sdk)
 
-    def test_64_bit_windows_sdk_is_rejected(self):
+    def test_64_bit_windows_sdk_dll_is_rejected(self):
         self._write_valid_layout()
         data = bytearray(make_pe32_x86())
         data[0x44:0x46] = (0x8664).to_bytes(2, "little")
         data[0x58:0x5A] = (0x020B).to_bytes(2, "little")
         (self.sdk / "redistributable_bin/steam_api.dll").write_bytes(data)
         with self.assertRaisesRegex(ValueError, "32-bit Windows x86"):
+            verify_sdk(self.sdk)
+
+    def test_64_bit_windows_import_library_is_rejected(self):
+        self._write_valid_layout()
+        (self.sdk / "redistributable_bin/steam_api.lib").write_bytes(
+            make_coff_archive(0x8664)
+        )
+        with self.assertRaisesRegex(ValueError, "x86 COFF archive/import library"):
+            verify_sdk(self.sdk)
+
+    def test_malformed_windows_import_library_is_rejected(self):
+        self._write_valid_layout()
+        (self.sdk / "redistributable_bin/steam_api.lib").write_bytes(b"!<arch>\ntruncated")
+        with self.assertRaisesRegex(ValueError, "x86 COFF archive/import library"):
             verify_sdk(self.sdk)
 
     def test_non_i386_linux_sdk_is_rejected(self):

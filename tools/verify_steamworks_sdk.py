@@ -17,6 +17,17 @@ REQUIRED_FILES = (
     Path("redistributable_bin/linux32/libsteam_api.so"),
 )
 
+_ARCHIVE_SIGNATURE = b"!<arch>\n"
+_COFF_MACHINE_X86 = 0x014C
+_KNOWN_COFF_MACHINES = {
+    0x014C,  # IMAGE_FILE_MACHINE_I386
+    0x01C0,  # IMAGE_FILE_MACHINE_ARM
+    0x01C4,  # IMAGE_FILE_MACHINE_ARMNT
+    0x01F0,  # IMAGE_FILE_MACHINE_POWERPC
+    0x8664,  # IMAGE_FILE_MACHINE_AMD64
+    0xAA64,  # IMAGE_FILE_MACHINE_ARM64
+}
+
 
 def _is_win32_x86_pe(path: Path) -> bool:
     with path.open("rb") as stream:
@@ -33,7 +44,56 @@ def _is_win32_x86_pe(path: Path) -> bool:
         return False
     machine = int.from_bytes(pe_header[4:6], "little")
     optional_magic = int.from_bytes(pe_header[24:26], "little")
-    return machine == 0x014C and optional_magic == 0x010B
+    return machine == _COFF_MACHINE_X86 and optional_magic == 0x010B
+
+
+def _is_coff_archive_x86(path: Path) -> bool:
+    """Validate the archive and reject any recognized non-x86 COFF member."""
+    data = path.read_bytes()
+    if not data.startswith(_ARCHIVE_SIGNATURE):
+        return False
+
+    offset = len(_ARCHIVE_SIGNATURE)
+    found_x86_object = False
+
+    while offset < len(data):
+        # Every archive member has a fixed 60-byte header followed by its data.
+        if offset + 60 > len(data):
+            return False
+
+        header = data[offset:offset + 60]
+        if header[58:60] != b"`\n":
+            return False
+
+        raw_size = header[48:58].decode("ascii", errors="ignore").strip()
+        if not raw_size.isdigit():
+            return False
+
+        member_size = int(raw_size)
+        member_start = offset + 60
+        member_end = member_start + member_size
+        if member_end > len(data):
+            return False
+
+        member_name = header[:16].decode("ascii", errors="ignore").strip()
+        member = data[member_start:member_end]
+
+        # The linker symbol index and long-name table do not contain COFF objects.
+        if member_name not in {"/", "//", "/SYM64/"} and len(member) >= 2:
+            # Import-object members have Sig1=0, Sig2=0xffff, then Version and Machine.
+            if len(member) >= 8 and member[:4] == b"\x00\x00\xff\xff":
+                machine = int.from_bytes(member[6:8], "little")
+            else:
+                machine = int.from_bytes(member[:2], "little")
+
+            if machine in _KNOWN_COFF_MACHINES:
+                if machine != _COFF_MACHINE_X86:
+                    return False
+                found_x86_object = True
+
+        offset = member_end + (member_size & 1)
+
+    return found_x86_object
 
 
 def _is_linux_x86_elf(path: Path) -> bool:
@@ -43,6 +103,8 @@ def _is_linux_x86_elf(path: Path) -> bool:
         return False
     elf_class = header[4]
     data_encoding = header[5]
+    if data_encoding not in (1, 2):
+        return False
     machine = int.from_bytes(header[18:20], "little" if data_encoding == 1 else "big")
     return elf_class == 1 and data_encoding == 1 and machine == 3
 
@@ -74,8 +136,10 @@ def verify_sdk(sdk_root: str | Path = DEFAULT_SDK_ROOT) -> dict[str, object]:
     linux_so = root / "redistributable_bin/linux32/libsteam_api.so"
     if not _is_win32_x86_pe(windows_dll):
         raise ValueError("redistributable_bin/steam_api.dll is not a valid 32-bit Windows x86 PE binary")
-    if windows_lib.read_bytes()[:8] != b"!<arch>\n":
-        raise ValueError("redistributable_bin/steam_api.lib is not a valid COFF archive/import library")
+    if not _is_coff_archive_x86(windows_lib):
+        raise ValueError(
+            "redistributable_bin/steam_api.lib is not a valid x86 COFF archive/import library"
+        )
     if not _is_linux_x86_elf(linux_so):
         raise ValueError("redistributable_bin/linux32/libsteam_api.so is not a valid 32-bit Linux i386 ELF binary")
 
