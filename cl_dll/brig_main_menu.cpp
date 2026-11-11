@@ -355,6 +355,8 @@ bool IsRussianClientLanguage()
         CVAR_GET_STRING("cl_language")
     };
 
+    // Different Steam Legacy/GameUI builds expose different language cvars.
+    // A stale "english" value must not mask a Russian value from another cvar.
     for (const char* candidate : candidates)
     {
         if (!candidate || !*candidate)
@@ -364,10 +366,16 @@ bool IsRussianClientLanguage()
         std::transform(language.begin(), language.end(), language.begin(),
             [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-        if (language == "russian" || language == "ru")
+        const std::size_t first = language.find_first_not_of(" \t");
+        if (first == std::string::npos)
+            continue;
+        language = language.substr(first);
+        const std::size_t last = language.find_last_not_of(" \t");
+        language.resize(last + 1);
+
+        if (language == "ru" || language.rfind("ru-", 0) == 0 ||
+            language.rfind("ru_", 0) == 0 || language.rfind("russian", 0) == 0)
             return true;
-        if (language == "english" || language == "en")
-            return false;
     }
 
     return false;
@@ -375,27 +383,54 @@ bool IsRussianClientLanguage()
 
 const std::unordered_map<std::string, std::string>& MenuTokens()
 {
-    static const std::unordered_map<std::string, std::string> tokens = []()
-    {
-        std::unordered_map<std::string, std::string> result;
-        std::string contents;
-        const char* path = IsRussianClientLanguage()
-            ? "resource/gameui_russian.txt"
-            : "resource/gameui_english.txt";
+    static std::unordered_map<std::string, std::string> tokens;
+    static bool loaded = false;
+    static bool loadedRussian = false;
 
-        if (!ReadBoundedTextFile(path, 64 * 1024, contents))
-            return result;
+    const bool russian = IsRussianClientLanguage();
+    if (loaded && loadedRussian == russian)
+        return tokens;
+
+    tokens.clear();
+    const char* paths[] = {
+        russian ? "resource/gameui_russian.txt" : "resource/gameui_english.txt",
+        russian ? "resource/gameui_english.txt" : nullptr
+    };
+
+    for (const char* path : paths)
+    {
+        if (!path)
+            continue;
+
+        std::string contents;
+        if (!ReadBoundedTextFile(path, 128 * 1024, contents))
+            continue;
 
         std::istringstream input(contents);
         std::string line;
-
         while (std::getline(input, line))
         {
             const std::size_t keyStart = line.find('"');
             if (keyStart == std::string::npos)
                 continue;
 
-            const std::size_t keyEnd = line.find('"', keyStart + 1);
+            auto findUnescapedQuote = [&line](std::size_t begin) -> std::size_t
+            {
+                for (std::size_t i = begin; i < line.size(); ++i)
+                {
+                    if (line[i] != '"')
+                        continue;
+
+                    std::size_t backslashes = 0;
+                    for (std::size_t j = i; j > 0 && line[j - 1] == '\\'; --j)
+                        ++backslashes;
+                    if ((backslashes % 2) == 0)
+                        return i;
+                }
+                return std::string::npos;
+            };
+
+            const std::size_t keyEnd = findUnescapedQuote(keyStart + 1);
             if (keyEnd == std::string::npos)
                 continue;
 
@@ -403,7 +438,7 @@ const std::unordered_map<std::string, std::string>& MenuTokens()
             if (valueStart == std::string::npos)
                 continue;
 
-            const std::size_t valueEnd = line.find('"', valueStart + 1);
+            const std::size_t valueEnd = findUnescapedQuote(valueStart + 1);
             if (valueEnd == std::string::npos)
                 continue;
 
@@ -411,13 +446,16 @@ const std::unordered_map<std::string, std::string>& MenuTokens()
             if (key.empty() || key[0] == '[')
                 continue;
 
-            result[key] = DecodeQuotedValue(
+            tokens[key] = DecodeQuotedValue(
                 line.substr(valueStart + 1, valueEnd - valueStart - 1));
         }
 
-        return result;
-    }();
+        if (!tokens.empty())
+            break;
+    }
 
+    loadedRussian = russian;
+    loaded = !tokens.empty();
     return tokens;
 }
 
@@ -524,18 +562,69 @@ const char* ConnectionTypeFallback(BrigSession::ConnectionType type)
     }
 }
 
-const char* CampaignCategoryFallback(BrigCampaignCatalog::Category category)
+const char* CampaignCategoryToken(BrigCampaignCatalog::Category category)
 {
     switch (category)
     {
-    case BrigCampaignCatalog::Category::HalfLife1: return "Half-Life 1";
-    case BrigCampaignCatalog::Category::BlueShift: return "Blue Shift (not implemented)";
-    case BrigCampaignCatalog::Category::OpposingForce: return "Opposing Force (not implemented)";
-    case BrigCampaignCatalog::Category::Custom: return "Custom BRIG campaigns";
+    case BrigCampaignCatalog::Category::HalfLife1: return "BRIG_CampaignCategory_HalfLife1";
+    case BrigCampaignCatalog::Category::BlueShift: return "BRIG_CampaignCategory_BlueShift";
+    case BrigCampaignCatalog::Category::OpposingForce: return "BRIG_CampaignCategory_OpposingForce";
+    case BrigCampaignCatalog::Category::Custom: return "BRIG_CampaignCategory_Custom";
     case BrigCampaignCatalog::Category::All:
-    default: return "All campaigns";
+    default: return "BRIG_CampaignCategory_All";
     }
 }
+
+std::string CampaignCategoryText(BrigCampaignCatalog::Category category)
+{
+    const char* fallback = "All campaigns";
+    switch (category)
+    {
+    case BrigCampaignCatalog::Category::HalfLife1: fallback = "Half-Life 1"; break;
+    case BrigCampaignCatalog::Category::BlueShift: fallback = "Blue Shift (not implemented)"; break;
+    case BrigCampaignCatalog::Category::OpposingForce: fallback = "Opposing Force (not implemented)"; break;
+    case BrigCampaignCatalog::Category::Custom: fallback = "Custom BRIG campaigns"; break;
+    case BrigCampaignCatalog::Category::All:
+    default: break;
+    }
+    return MenuText(CampaignCategoryToken(category), fallback);
+}
+
+const char* ConnectionTypeToken(BrigSession::ConnectionType type)
+{
+    switch (type)
+    {
+    case BrigSession::ConnectionType::ListenServer: return "BRIG_Connection_ListenServer";
+    case BrigSession::ConnectionType::DedicatedServer: return "BRIG_Connection_DedicatedServer";
+    case BrigSession::ConnectionType::Local:
+    default: return "BRIG_Connection_Local";
+    }
+}
+
+std::string ConnectionTypeText(BrigSession::ConnectionType type)
+{
+    const char* fallback = "Local";
+    switch (type)
+    {
+    case BrigSession::ConnectionType::ListenServer: fallback = "Listen server"; break;
+    case BrigSession::ConnectionType::DedicatedServer: fallback = "Dedicated server"; break;
+    case BrigSession::ConnectionType::Local:
+    default: break;
+    }
+    return MenuText(ConnectionTypeToken(type), fallback);
+}
+
+const char* DifficultyToken(int difficulty)
+{
+    switch (BrigSession::NormalizeDifficulty(difficulty))
+    {
+    case 1: return "BRIG_Difficulty_Easy";
+    case 3: return "BRIG_Difficulty_Hard";
+    case 2:
+    default: return "BRIG_Difficulty_Normal";
+    }
+}
+
 
 int CycleServerLimit(int current, const int* values, std::size_t count)
 {
@@ -833,6 +922,7 @@ CBrigMainMenuPanel::CBrigMainMenuPanel(int x, int y, int wide, int tall)
         m_pButtons[i] = new CommandButton("", 0, 0, 480, 30, false, true);
         m_pButtons[i]->setParent(this);
         m_pButtons[i]->addActionSignal(new CBrigMenuButtonSignal(this, i));
+        m_pButtons[i]->setMouseClickEnabled(MOUSE_LEFT, true);
         m_pButtons[i]->setVisible(false);
     }
 
@@ -1087,14 +1177,14 @@ void CBrigMainMenuPanel::RenderPage()
         const auto campaigns = GetSelectableCampaigns(maps, m_campaignCategory);
         std::ostringstream body;
         body << MenuText("BRIG_Menu_Category", "Category") << ": "
-             << CampaignCategoryFallback(m_campaignCategory) << "\n";
+             << CampaignCategoryText(m_campaignCategory) << "\n";
         body << campaigns.size() << " "
              << MenuText("BRIG_Menu_CampaignsAvailable", "playable campaigns registered");
         m_pBody->setText(body.str().c_str());
 
         SetCommandButton(0, ButtonCommand::CycleCategory,
             std::string(MenuText("BRIG_Menu_Category", "Category")) + ": " +
-                CampaignCategoryFallback(m_campaignCategory));
+                CampaignCategoryText(m_campaignCategory));
         SetCommandButton(1, ButtonCommand::OpenCampaignList,
             MenuText("BRIG_Menu_BrowseCampaigns", "Browse campaigns"));
         SetCommandButton(2, ButtonCommand::OpenTrainingCourses,
@@ -1353,7 +1443,7 @@ void CBrigMainMenuPanel::RenderPage()
         const auto& session = BrigSession::GetActiveSessionConfiguration();
         SetCommandButton(0, ButtonCommand::ToggleDifficulty,
             std::string(MenuText("BRIG_Menu_Difficulty", "Difficulty")) + ": " +
-                BrigSession::DifficultyName(session.difficulty));
+                MenuText(DifficultyToken(session.difficulty), BrigSession::DifficultyName(session.difficulty)));
         SetCommandButton(1, ButtonCommand::ToggleCheats,
             std::string(MenuText("BRIG_Menu_Cheats", "Cheats")) + ": " +
                 MenuText(session.allowCheats ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
@@ -1592,7 +1682,7 @@ std::string CBrigMainMenuPanel::BuildCreateGameText() const
          << (selected == maps.end() ? MenuText("BRIG_Menu_NotSelected", "Not selected") : selected->title)
          << "\n";
     text << MenuText("BRIG_Menu_SessionConnection", "Connection") << ": "
-         << ConnectionTypeFallback(session.connectionType) << "\n";
+         << ConnectionTypeText(session.connectionType) << "\n";
     text << MenuText("BRIG_Menu_SessionPlayers", "Max players") << ": "
          << session.maxPlayers << "\n";
     text << MenuText("BRIG_Menu_SessionLan", "LAN") << ": "
@@ -1613,13 +1703,13 @@ std::string CBrigMainMenuPanel::BuildSessionText() const
     text << MenuText("BRIG_Menu_SessionMode", "Mode") << ": "
          << MenuText(ModeToken(session.mode), ModeFallback(session.mode)) << "\n";
     text << MenuText("BRIG_Menu_SessionConnection", "Connection") << ": "
-         << ConnectionTypeFallback(session.connectionType) << "\n";
+         << ConnectionTypeText(session.connectionType) << "\n";
     text << MenuText("BRIG_Menu_SessionMap", "Map") << ": "
          << (session.mapId.empty() ? MenuText("BRIG_Menu_NotSelected", "Not selected") : session.mapId) << "\n";
     text << MenuText("BRIG_Menu_SessionPlayers", "Max players") << ": "
          << session.maxPlayers << "\n";
     text << MenuText("BRIG_Menu_SessionDifficulty", "Difficulty") << ": "
-         << BrigSession::DifficultyName(session.difficulty) << "\n";
+         << MenuText(DifficultyToken(session.difficulty), BrigSession::DifficultyName(session.difficulty)) << "\n";
     text << MenuText("BRIG_Menu_SessionLan", "LAN") << ": "
          << MenuText(session.lan ? "BRIG_Menu_Enabled" : "BRIG_Menu_Disabled",
              session.lan ? "Enabled" : "Disabled") << "\n";

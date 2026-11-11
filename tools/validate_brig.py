@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # these three resources are accepted only at this exact reviewed revision.
 APPROVED_RESOURCE_OVERRIDES = {
     "resource/gamemenu.res": "83e64c0fbab103db520e857899152a0acd75c25c0ad2ea0804b3f34c21efbc3b",
-    "resource/gameui_english.txt": "e4b337ae811b49ea6aaf8f31690c00aeab69f724540d985bd450974910c6738f",
-    "resource/gameui_russian.txt": "d331658574853d758970162c0d19a5228a4f2d02c14a5273b250ac93c621357a",
+    "resource/gameui_english.txt": "8542629a882c5e6e9309568d8ed7b3fc5b61a9775cef9b5a87e3c4c4894372dd",
+    "resource/gameui_russian.txt": "55c9fe92577c29aba6943a44aecc9e56d3c5ae5dc7862c8a769da70c926db58b",
 }
 
 # The map manifest is the source of truth for the generated metadata

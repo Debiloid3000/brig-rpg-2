@@ -20,9 +20,19 @@ including `cl_dlls/client.dll`, `dlls/hl.dll` and build metadata. The neighborin
 See [docs/brig-packaging.md](docs/brig-packaging.md) for asset policy and release
 automation, and `_folder/brig/README_INSTALL.txt` for installation instructions.
 
-For a local unpacked installation, copy `_folder/brig` beside Steam's `hl.exe`,
-then place the same compiled DLLs into its `cl_dlls` and `dlls` subdirectories.
-Select `steam_legacy` in Half-Life's Steam beta settings and run `hl.exe -game brig`.
+For a local unpacked installation, copy `_folder/brig` beside Steam's `hl.exe`.
+To make ordinary Visual Studio builds install DLLs into that exact mod folder, set the
+explicit destination before building:
+
+```powershell
+$env:BRIG_GAME_DIR = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Half-Life\\brig"
+msbuild projects/vs2019/projects.sln -t:rebuild -p:Configuration=Release -p:Platform=Win32 -p:PlatformToolset=v143
+```
+
+Without `BRIG_GAME_DIR`, automatic installation is skipped and DLLs remain in the
+project output directories. Release packaging deliberately disables post-build
+installation. Select `steam_legacy` in Half-Life's Steam beta settings and run
+`hl.exe -game brig`.
 
 The original SDK notes below describe general SDK development. The old
 `halflife_updated/scripts/packager/CreatePackage.csx` referenced below is not the
