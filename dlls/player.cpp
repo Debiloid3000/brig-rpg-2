@@ -36,6 +36,7 @@
 #include "shake.h"
 #include "decals.h"
 #include "gamerules.h"
+#include "gamemode_features.h"
 #include "game.h"
 #include "pm_shared.h"
 #include "hltv.h"
@@ -586,6 +587,13 @@ bool CBasePlayer::TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, fl
 //=========================================================
 void CBasePlayer::PackDeadPlayerItems()
 {
+	// Co-op inventory belongs to the player, not to a temporary death weaponbox.
+	// Keep weapon entities linked to the player and leave all ammo untouched.
+	if (g_pGameRules && g_pGameRules->IsCoOp())
+	{
+		return;
+	}
+
 	int iWeaponRules;
 	int iAmmoRules;
 	int i;
@@ -2683,6 +2691,40 @@ bool IsSpawnPointValid(CBaseEntity* pPlayer, CBaseEntity* pSpot)
 	return true;
 }
 
+// Co-op spawn points are shared by several clients. Prefer a triggered,
+// non-origin point that is not already occupied, then keep the first usable
+// point as a last resort when every spawn is occupied.
+static CBaseEntity* FindCoOpSpawnPoint(
+	CBaseEntity* pPlayer, const char* className, bool allowOccupiedFallback)
+{
+	CBaseEntity* pSpot = UTIL_FindEntityByClassname(g_pLastSpawn, className);
+	if (FNullEnt(pSpot))
+		pSpot = UTIL_FindEntityByClassname(NULL, className);
+	if (FNullEnt(pSpot))
+		return NULL;
+
+	CBaseEntity* pFirstSpot = pSpot;
+	CBaseEntity* pFallback = NULL;
+
+	do
+	{
+		if (pSpot->pev->origin != Vector(0, 0, 0) && pSpot->IsTriggered(pPlayer))
+		{
+			if (!pFallback)
+				pFallback = pSpot;
+
+			if (IsSpawnPointValid(pPlayer, pSpot))
+				return pSpot;
+		}
+
+		pSpot = UTIL_FindEntityByClassname(pSpot, className);
+		if (FNullEnt(pSpot))
+			pSpot = UTIL_FindEntityByClassname(NULL, className);
+	} while (pSpot != pFirstSpot);
+
+	return allowOccupiedFallback ? pFallback : NULL;
+}
+
 /*
 ============
 EntSelectSpawnPoint
@@ -2699,13 +2741,24 @@ edict_t* EntSelectSpawnPoint(CBaseEntity* pPlayer)
 
 	player = pPlayer->edict();
 
-	// choose a info_player_deathmatch point
-	if (g_pGameRules->IsCoOp())
+	// During a level transition, the named landmark/start spot must win.
+	// Otherwise Co-op cycles through usable shared spawn points without
+	// deliberately placing a player on top of another client.
+	const bool hasStartSpot = !FStringNull(gpGlobals->startspot) &&
+		strlen(STRING(gpGlobals->startspot)) > 0;
+	if (g_pGameRules->IsCoOp() && !hasStartSpot)
 	{
-		pSpot = UTIL_FindEntityByClassname(g_pLastSpawn, "info_player_coop");
-		if (!FNullEnt(pSpot))
-			goto ReturnSpot;
-		pSpot = UTIL_FindEntityByClassname(g_pLastSpawn, "info_player_start");
+		pSpot = FindCoOpSpawnPoint(pPlayer, "info_player_coop", false);
+		if (FNullEnt(pSpot))
+			pSpot = FindCoOpSpawnPoint(pPlayer, "info_player_start", false);
+
+		// No free point remains: use a usable spawn rather than killing a
+		// teammate or returning a null entity.
+		if (FNullEnt(pSpot))
+			pSpot = FindCoOpSpawnPoint(pPlayer, "info_player_coop", true);
+		if (FNullEnt(pSpot))
+			pSpot = FindCoOpSpawnPoint(pPlayer, "info_player_start", true);
+
 		if (!FNullEnt(pSpot))
 			goto ReturnSpot;
 	}
@@ -2870,11 +2923,19 @@ void CBasePlayer::Spawn()
 	m_pClientActiveItem = NULL;
 	m_iClientBattery = -1;
 
-	// reset all ammo values to 0
+	// Co-op keeps the inventory through death/respawn. The first spawn still
+	// starts with empty ammo; subsequent spawns retain the restored/live values.
+	const bool keepCoOpAmmo = g_pGameRules && g_pGameRules->IsCoOp() &&
+		m_bCoOpInventoryInitialized;
 	for (int i = 0; i < MAX_AMMO_SLOTS; i++)
 	{
-		m_rgAmmo[i] = 0;
-		m_rgAmmoLast[i] = 0; // client ammo values also have to be reset  (the death hud clear messages does on the client side)
+		if (!keepCoOpAmmo)
+		{
+			m_rgAmmo[i] = 0;
+		}
+
+		// Force the client HUD to refresh from the authoritative server values.
+		m_rgAmmoLast[i] = 0;
 	}
 
 	m_lastx = m_lasty = 0;
@@ -2882,6 +2943,15 @@ void CBasePlayer::Spawn()
 	m_flNextChatTime = gpGlobals->time;
 
 	g_pGameRules->PlayerSpawn(this);
+
+	if (g_pGameRules && g_pGameRules->IsCoOp())
+	{
+		m_bCoOpInventoryInitialized = true;
+	}
+	else
+	{
+		m_bCoOpInventoryInitialized = false;
+	}
 }
 
 
@@ -2936,6 +3006,13 @@ bool CBasePlayer::Restore(CRestore& restore)
 		return false;
 
 	bool status = restore.ReadFields("PLAYER", this, m_playerSaveData, ARRAYSIZE(m_playerSaveData));
+
+	// The existing PLAYER save table already restores weapon links and ammunition.
+	// Mark the restored inventory as initialized without changing the save format.
+	if (status && g_pGameRules && g_pGameRules->IsCoOp())
+	{
+		m_bCoOpInventoryInitialized = true;
+	}
 
 	SAVERESTOREDATA* pSaveData = (SAVERESTOREDATA*)gpGlobals->pSaveData;
 	// landmark isn't present.
@@ -3809,6 +3886,15 @@ Called every frame by the player PreThink
 */
 void CBasePlayer::ItemPreFrame()
 {
+	// In Co-op, a player caught by a Barnacle cannot use their held item to attack it.
+	// Singleplayer and Deathmatch keep the original Half-Life behavior.
+	if (g_pGameRules &&
+		(m_afPhysicsFlags & PFLAG_ONBARNACLE) != 0 &&
+		BrigGetGameModeFeatures(BrigResolveGameMode(*g_pGameRules)).lockWeaponInputWhileBarnacled)
+	{
+		return;
+	}
+
 #if defined(CLIENT_WEAPONS)
 	if (m_flNextAttack > 0)
 #else
@@ -3834,6 +3920,15 @@ Called every frame by the player PostThink
 */
 void CBasePlayer::ItemPostFrame()
 {
+	// Do not process weapon input while a Co-op player is held by a Barnacle.
+	// The Barnacle release/death path clears PFLAG_ONBARNACLE and restores input.
+	if (g_pGameRules &&
+		(m_afPhysicsFlags & PFLAG_ONBARNACLE) != 0 &&
+		BrigGetGameModeFeatures(BrigResolveGameMode(*g_pGameRules)).lockWeaponInputWhileBarnacled)
+	{
+		return;
+	}
+
 	// check if the player is using a tank
 	if (m_pTank != NULL)
 		return;

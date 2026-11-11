@@ -111,6 +111,22 @@ void DLLEXPORT HUD_PlayerMove(struct playermove_s* ppmove, int server)
 	PM_Move(ppmove, server);
 }
 
+static void BrigMenuPlayCommand()
+{
+	if (gViewPort)
+		gViewPort->OpenBrigMainMenu(false);
+	else
+		gEngfuncs.Con_DPrintf("BRIG Play menu requested before the client viewport was created.\n");
+}
+
+static void BrigMenuMultiplayerCommand()
+{
+	if (gViewPort)
+		gViewPort->OpenBrigMainMenu(true);
+	else
+		gEngfuncs.Con_DPrintf("BRIG Multiplayer menu requested before the client viewport was created.\n");
+}
+
 static bool CL_InitClient()
 {
 	EV_HookEvents();
@@ -128,6 +144,9 @@ static bool CL_InitClient()
 			"Run this mod from its intended location\n\nThe game will now shut down", nullptr);
 		return false;
 	}
+
+	gEngfuncs.pfnAddCommand("brig_menu_play", BrigMenuPlayCommand);
+	gEngfuncs.pfnAddCommand("brig_menu_multiplayer", BrigMenuMultiplayerCommand);
 
 	// get tracker interface, if any
 	return true;

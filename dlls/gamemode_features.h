@@ -1,0 +1,52 @@
+#pragma once
+
+#include "gamerules.h"
+#include "../game_shared/map_catalog.h"
+
+// Central mode identification for BRIG's existing CGameRules hierarchy.
+// Check Co-op before Deathmatch for compatibility with the generic
+// CHalfLifeMultiplay base, which still reports IsDeathmatch() unconditionally.
+using BrigGameMode = BrigMapCatalog::GameMode;
+
+struct BrigGameModeFeatures
+{
+	bool multiplayer;
+	bool playerRespawn;
+	bool friendlyPlayerRelationships;
+	bool playerVsPlayerDamage;
+	bool lockWeaponInputWhileBarnacled;
+};
+
+inline BrigGameMode BrigResolveGameMode(CGameRules& rules)
+{
+	if (rules.IsCoOp())
+	{
+		return BrigGameMode::CoOp;
+	}
+
+	if (!rules.IsDeathmatch())
+	{
+		return BrigGameMode::SinglePlayer;
+	}
+
+	return rules.IsTeamplay() ? BrigGameMode::TeamDeathmatch : BrigGameMode::Deathmatch;
+}
+
+inline BrigGameModeFeatures BrigGetGameModeFeatures(BrigGameMode mode)
+{
+	switch (mode)
+	{
+	case BrigGameMode::CoOp:
+		return {true, true, true, false, true};
+
+	case BrigGameMode::Deathmatch:
+		return {true, true, false, true, false};
+
+	case BrigGameMode::TeamDeathmatch:
+		return {true, true, true, true, false};
+
+	case BrigGameMode::SinglePlayer:
+	default:
+		return {false, true, false, false, false};
+	}
+}

@@ -485,12 +485,18 @@ void CHalfLifeMultiplay::PlayerSpawn(CBasePlayer* pPlayer)
 
 	pPlayer->SetHasSuit(true);
 
-	addDefault = true;
+	// A Co-op respawn must not duplicate the player's retained loadout or
+	// replay map equipment. First spawn (or an empty inventory) still receives
+	// the normal map-defined/default starting equipment.
+	addDefault = !IsCoOp() || !pPlayer->HasWeapons();
 
-	while (pWeaponEntity = UTIL_FindEntityByClassname(pWeaponEntity, "game_player_equip"))
+	if (addDefault)
 	{
-		pWeaponEntity->Touch(pPlayer);
-		addDefault = false;
+		while (pWeaponEntity = UTIL_FindEntityByClassname(pWeaponEntity, "game_player_equip"))
+		{
+			pWeaponEntity->Touch(pPlayer);
+			addDefault = false;
+		}
 	}
 
 	if (addDefault)
@@ -498,6 +504,16 @@ void CHalfLifeMultiplay::PlayerSpawn(CBasePlayer* pPlayer)
 		pPlayer->GiveNamedItem("weapon_crowbar");
 		pPlayer->GiveNamedItem("weapon_9mmhandgun");
 		pPlayer->GiveAmmo(68, "9mm", _9MM_MAX_CARRY); // 4 full reloads
+	}
+	else if (IsCoOp())
+	{
+		// Killed() holsters the active item. Re-deploy it after respawn so the
+		// preserved weapon is immediately usable again.
+		if (!pPlayer->m_pActiveItem ||
+			!pPlayer->m_pActiveItem->Deploy())
+		{
+			GetNextBestWeapon(pPlayer, pPlayer->m_pActiveItem, true);
+		}
 	}
 
 	pPlayer->m_iAutoWepSwitch = originalAutoWepSwitch;
@@ -1058,6 +1074,55 @@ bool CHalfLifeMultiplay::FAllowMonsters()
 	return (allowmonsters.value != 0);
 }
 
+CHalfLifeCoOp::CHalfLifeCoOp()
+{
+	// Keep the campaign's Singleplayer skill profile while reusing the
+	// multiplayer connection, HUD and respawn infrastructure.
+	g_teamplay = false;
+	RefreshSkillData();
+}
+
+void CHalfLifeCoOp::Think()
+{
+	// Co-op campaign progression is controlled by trigger_changelevel.
+	// Do not let inherited DeathMatch time/frag limits enter a mapcycle or
+	// intermission while the team is progressing through a story campaign.
+	g_VoiceGameMgr.Update(gpGlobals->frametime);
+}
+
+void CHalfLifeCoOp::RefreshSkillData()
+{
+	CGameRules::RefreshSkillData();
+}
+
+bool CHalfLifeCoOp::FAllowFlashlight()
+{
+	return flashlight.value != 0;
+}
+
+bool CHalfLifeCoOp::FPlayerCanTakeDamage(CBasePlayer* pPlayer, CBaseEntity* pAttacker)
+{
+	if (pAttacker && pAttacker != pPlayer && pAttacker->IsPlayer())
+		return friendlyfire.value != 0;
+
+	return CHalfLifeMultiplay::FPlayerCanTakeDamage(pPlayer, pAttacker);
+}
+
+int CHalfLifeCoOp::IPointsForKill(CBasePlayer*, CBasePlayer*)
+{
+	// Co-op is objective/progression focused; player kills award no frag points.
+	return 0;
+}
+
+int CHalfLifeCoOp::PlayerRelationship(CBaseEntity* pPlayer, CBaseEntity* pTarget)
+{
+	if (pPlayer && pTarget && pPlayer->IsPlayer() && pTarget->IsPlayer())
+		return GR_TEAMMATE;
+
+	return CHalfLifeMultiplay::PlayerRelationship(pPlayer, pTarget);
+}
+
+
 //=========================================================
 //======== CHalfLifeMultiplay private functions ===========
 #define INTERMISSION_TIME 6
@@ -1450,19 +1515,24 @@ void CHalfLifeMultiplay::ChangeLevel()
 	static char szPreviousMapCycleFile[256];
 	static mapcycle_t mapcycle;
 
-	char szNextMap[32];
-	char szFirstMapInList[32];
+	char szNextMap[32]{};
 	char szCommands[1500];
 	char szRules[1500];
 	int minplayers = 0, maxplayers = 0;
-	strcpy(szFirstMapInList, "hldm1"); // the absolute default level is hldm1
+
+	const char* currentMap = STRING(gpGlobals->mapname);
+	if (!currentMap)
+		currentMap = "";
+	strncpy(szNextMap, currentMap, sizeof(szNextMap) - 1);
 
 	int curplayers;
 	bool do_cycle = true;
+	bool forceCatalogFallback = false;
+	const bool teamDeathmatch = g_pGameRules && g_pGameRules->IsTeamplay();
 
-	// find the map to change to
 	char* mapcfile = (char*)CVAR_GET_STRING("mapcyclefile");
-	ASSERT(mapcfile != NULL);
+	if (!mapcfile)
+		mapcfile = const_cast<char*>("mapcycle.txt");
 
 	szCommands[0] = '\0';
 	szRules[0] = '\0';
@@ -1472,7 +1542,8 @@ void CHalfLifeMultiplay::ChangeLevel()
 	// Has the map cycle filename changed?
 	if (stricmp(mapcfile, szPreviousMapCycleFile))
 	{
-		strcpy(szPreviousMapCycleFile, mapcfile);
+		strncpy(szPreviousMapCycleFile, mapcfile, sizeof(szPreviousMapCycleFile) - 1);
+		szPreviousMapCycleFile[sizeof(szPreviousMapCycleFile) - 1] = '\0';
 
 		DestroyMapCycle(&mapcycle);
 
@@ -1485,72 +1556,125 @@ void CHalfLifeMultiplay::ChangeLevel()
 
 	if (do_cycle && mapcycle.items)
 	{
-		bool keeplooking = false;
-		bool found = false;
+		mapcycle_item_s* selectedItem = nullptr;
 		mapcycle_item_s* item;
+		mapcycle_item_s* firstItem = mapcycle.next_item;
 
-		// Assume current map
-		strcpy(szNextMap, STRING(gpGlobals->mapname));
-		strcpy(szFirstMapInList, STRING(gpGlobals->mapname));
-
-		// Traverse list
-		for (item = mapcycle.next_item; item->next != mapcycle.next_item; item = item->next)
+		// The mapcycle file remains an operator-controlled ordering and
+		// player-count filter, but every candidate must be registered and
+		// enabled for the active multiplayer mode in the shared map catalog.
+		if (firstItem)
 		{
-			keeplooking = false;
-
-			ASSERT(item != NULL);
-
-			if (item->minplayers != 0)
+			item = firstItem;
+			do
 			{
-				if (curplayers >= item->minplayers)
+				if (MapCatalog_IsAllowedForMultiplayer(item->mapname, teamDeathmatch))
 				{
-					found = true;
-					minplayers = item->minplayers;
+					bool keeplooking = false;
+					if (item->minplayers != 0)
+					{
+						if (curplayers >= item->minplayers)
+							minplayers = item->minplayers;
+						else
+							keeplooking = true;
+					}
+
+					if (item->maxplayers != 0)
+					{
+						if (curplayers <= item->maxplayers)
+							maxplayers = item->maxplayers;
+						else
+							keeplooking = true;
+					}
+
+					if (!keeplooking)
+					{
+						selectedItem = item;
+						break;
+					}
 				}
 				else
 				{
-					keeplooking = true;
+					ALERT(at_console, "Skipping mapcycle map %s: not registered/enabled for %s\n",
+						item->mapname, teamDeathmatch ? "Team Deathmatch" : "DeathMatch");
 				}
-			}
 
-			if (item->maxplayers != 0)
-			{
-				if (curplayers <= item->maxplayers)
-				{
-					found = true;
-					maxplayers = item->maxplayers;
-				}
-				else
-				{
-					keeplooking = true;
-				}
-			}
-
-			if (keeplooking)
-				continue;
-
-			found = true;
-			break;
+				item = item->next;
+			} while (item && item != firstItem);
 		}
 
-		if (!found)
+		// If player-count limits exclude every eligible entry, use the first
+		// catalog-approved entry rather than selecting a stale/unsupported map.
+		if (!selectedItem && firstItem)
 		{
-			item = mapcycle.next_item;
+			// We are now ignoring player-count limits, so do not report the
+			// constraints from candidates that were skipped.
+			minplayers = 0;
+			maxplayers = 0;
+			item = firstItem;
+			do
+			{
+				if (MapCatalog_IsAllowedForMultiplayer(item->mapname, teamDeathmatch))
+				{
+					selectedItem = item;
+					break;
+				}
+				item = item->next;
+			} while (item && item != firstItem);
 		}
 
-		// Increment next item pointer
-		mapcycle.next_item = item->next;
+		if (selectedItem)
+		{
+			mapcycle.next_item = selectedItem->next;
+			strncpy(szNextMap, selectedItem->mapname, sizeof(szNextMap) - 1);
+			szNextMap[sizeof(szNextMap) - 1] = '\0';
 
-		// Perform logic on current item
-		strcpy(szNextMap, item->mapname);
-
-		ExtractCommandString(item->rulebuffer, szCommands);
-		strcpy(szRules, item->rulebuffer);
+			ExtractCommandString(selectedItem->rulebuffer, szCommands);
+			strncpy(szRules, selectedItem->rulebuffer, sizeof(szRules) - 1);
+			szRules[sizeof(szRules) - 1] = '\0';
+		}
+		else
+		{
+			forceCatalogFallback = true;
+			ALERT(at_console, "Mapcycle has no maps enabled in the BRIG catalog for this mode.\n");
+		}
 	}
 
 	if (!IS_MAP_VALID(szNextMap))
 	{
-		strcpy(szNextMap, szFirstMapInList);
+		strncpy(szNextMap, currentMap, sizeof(szNextMap) - 1);
+		szNextMap[sizeof(szNextMap) - 1] = '\0';
+	}
+
+	// Final guard also covers an invalid current map or a mapcycle fallback.
+	if (forceCatalogFallback || !MapCatalog_IsAllowedForMultiplayer(szNextMap, teamDeathmatch))
+	{
+		const char* fallback = nullptr;
+		for (int i = 0; i < MapCatalog_GetAvailableMapCount(); ++i)
+		{
+			const char* candidate = MapCatalog_GetAvailableMapName(i);
+			if (candidate && MapCatalog_IsAllowedForMultiplayer(candidate, teamDeathmatch))
+			{
+				fallback = candidate;
+				break;
+			}
+		}
+
+		if (fallback)
+		{
+			minplayers = 0;
+			maxplayers = 0;
+			strncpy(szNextMap, fallback, sizeof(szNextMap) - 1);
+			szNextMap[sizeof(szNextMap) - 1] = '\0';
+			ALERT(at_console, "Map rotation selected %s from the BRIG catalog fallback.\n", szNextMap);
+		}
+		else
+		{
+			ALERT(at_console, "No maps are enabled for %s in the BRIG catalog; staying on %s.\n",
+				teamDeathmatch ? "Team Deathmatch" : "DeathMatch", currentMap);
+			strncpy(szNextMap, currentMap, sizeof(szNextMap) - 1);
+			szNextMap[sizeof(szNextMap) - 1] = '\0';
+		}
 	}
 
 	g_fGameOver = true;

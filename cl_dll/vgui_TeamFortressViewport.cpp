@@ -51,6 +51,7 @@
 
 #include "vgui_int.h"
 #include "vgui_TeamFortressViewport.h"
+#include "brig_main_menu.h"
 #include "vgui_ScorePanel.h"
 #include "vgui_SpectatorPanel.h"
 
@@ -520,6 +521,7 @@ TeamFortressViewport::TeamFortressViewport(int x, int y, int wide, int tall) : P
 	m_pSpectatorPanel = NULL;
 	m_pCurrentMenu = NULL;
 	m_pCurrentCommandMenu = NULL;
+	m_pBrigMainMenu = NULL;
 
 	Initialize();
 	addInputSignal(new CViewPortInputHandler);
@@ -599,6 +601,29 @@ TeamFortressViewport::TeamFortressViewport(int x, int y, int wide, int tall) : P
 	m_pCommandMenus[m_PlayerMenu]->m_iSpectCmdMenu = true;
 
 	UpdatePlayerMenu(m_PlayerMenu);
+
+	m_pBrigMainMenu = new CBrigMainMenuPanel(0, 0, wide, tall);
+	m_pBrigMainMenu->setParent(this);
+	m_pBrigMainMenu->setVisible(false);
+}
+
+void TeamFortressViewport::OpenBrigMainMenu(bool multiplayer)
+{
+	if (!m_pBrigMainMenu)
+	{
+		gEngfuncs.Con_DPrintf("BRIG menu is not initialized yet.\n");
+		return;
+	}
+
+	HideCommandMenu();
+	HideVGUIMenu();
+	if (multiplayer)
+		m_pBrigMainMenu->ShowMultiplayer();
+	else
+		m_pBrigMainMenu->ShowPlay();
+
+	SetCurrentMenu(m_pBrigMainMenu);
+	UpdateCursorState();
 }
 
 //-----------------------------------------------------------------------------
@@ -1796,6 +1821,16 @@ bool TeamFortressViewport::SlotInput(int iSlot)
 // Direct Key Input
 bool TeamFortressViewport::KeyInput(bool down, int keynum, const char* pszCurrentBinding)
 {
+	// The BRIG navigation panel owns keyboard input while it is visible.
+	if (m_pBrigMainMenu && m_pCurrentMenu == m_pBrigMainMenu && 0 == gEngfuncs.Con_IsVisible())
+	{
+		// A focused TextEntry receives its key events through VGUI App. Do not
+		// let typing or editing keys move the main menu selection.
+		if (!m_pBrigMainMenu->HandleTextEntryKeyInput(down, keynum))
+			m_pBrigMainMenu->HandleKeyInput(down, keynum);
+		return false;
+	}
+
 	// Enter gets out of Spectator Mode by bringing up the Team Menu
 	if (0 != m_iUser1 && 0 == gEngfuncs.Con_IsVisible())
 	{

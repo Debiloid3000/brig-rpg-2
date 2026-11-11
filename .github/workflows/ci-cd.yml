@@ -35,6 +35,8 @@ jobs:
           /tmp/brig-legacy-api
           ${{ matrix.compiler }} -m32 -std=c++17 -Iengine -Icommon -Ipublic -Ipm_shared -Idlls tests/legacy_server_api.cpp -o /tmp/brig-legacy-server-api
           /tmp/brig-legacy-server-api
+          ${{ matrix.compiler }} -m32 -std=c++17 -Igame_shared tests/map_catalog_tests.cpp -o /tmp/brig-map-catalog-tests
+          /tmp/brig-map-catalog-tests
       
       - name: Deploy
         uses: actions/upload-artifact@v4

@@ -18,7 +18,13 @@
 #include "client.h"
 #include "game.h"
 #include "filesystem_utils.h"
+#include "map_catalog.h"
+#include <algorithm>
+#include <cstdint>
 #include <stdio.h>
+#include <string>
+#include <utility>
+#include <vector>
 
 cvar_t displaysoundlist = {"displaysoundlist", "0"};
 
@@ -59,6 +65,262 @@ struct MapSoundReplacement
 
 static MapSoundReplacement g_mapSoundReplacements[256]{};
 static size_t g_mapSoundReplacementCount = 0;
+
+struct RuntimeMapCatalogEntry
+{
+	BrigMapCatalog::MapMetadata metadata;
+};
+
+static std::vector<RuntimeMapCatalogEntry> g_mapCatalog;
+
+static bool MapCatalog_ReadTextFile(const char* path, std::size_t maxBytes, std::string& output)
+{
+	if (!g_pFileSystem || !path)
+		return false;
+
+	FSFile file(path, "rb");
+	if (!file)
+		return false;
+
+	const std::size_t size = file.Size();
+	if (size > maxBytes)
+	{
+		ALERT(at_console, "Map catalog: %s exceeds the permitted size.\n", path);
+		return false;
+	}
+
+	std::vector<char> buffer(size + 1, '\0');
+	if (size > 0 && file.Read(buffer.data(), static_cast<int>(size)) != static_cast<int>(size))
+	{
+		ALERT(at_console, "Map catalog: failed to read %s.\n", path);
+		return false;
+	}
+
+	output.assign(buffer.data(), size);
+	return true;
+}
+
+static bool MapCatalog_BspExists(const std::string& mapId)
+{
+	if (!BrigMapCatalog::IsValidMapId(mapId))
+		return false;
+
+	char path[96];
+	const int written = snprintf(path, sizeof(path), "maps/%s.bsp", mapId.c_str());
+	if (written <= 0 || static_cast<std::size_t>(written) >= sizeof(path))
+		return false;
+
+	FSFile file(path, "rb");
+	if (!file || file.Size() < 4)
+		return false;
+
+	unsigned char header[4]{};
+	return file.Read(header, sizeof(header)) == static_cast<int>(sizeof(header)) &&
+		BrigMapCatalog::IsGoldSrcBspHeader(header, sizeof(header));
+}
+
+static bool MapCatalog_LoadMapConfig(const std::string& mapId, BrigMapCatalog::MapMetadata& metadata)
+{
+	if (!BrigMapCatalog::IsValidMapId(mapId))
+		return false;
+
+	char path[96];
+	const int written = snprintf(path, sizeof(path), "maps/%s.cfg", mapId.c_str());
+	if (written <= 0 || static_cast<std::size_t>(written) >= sizeof(path))
+		return false;
+
+	FSFile file(path, "rb");
+	if (!file)
+		return false;
+
+	metadata.hasConfig = true;
+	const std::size_t size = file.Size();
+	if (size > BrigMapCatalog::MaxConfigBytes)
+	{
+		ALERT(at_console, "Map CFG %s exceeds 16 KiB and was ignored.\n", path);
+		return true;
+	}
+
+	std::vector<char> buffer(size + 1, '\0');
+	if (size > 0 && file.Read(buffer.data(), static_cast<int>(size)) != static_cast<int>(size))
+	{
+		ALERT(at_console, "Failed reading map CFG %s.\n", path);
+		return true;
+	}
+
+	const std::string text(buffer.data(), size);
+	std::vector<BrigMapCatalog::ParseIssue> issues;
+	if (!BrigMapCatalog::ParseMapConfig(text, metadata, &issues))
+	{
+		ALERT(at_console, "Map CFG %s is invalid; safe defaults will be used.\n", path);
+		return true;
+	}
+
+	for (const auto& issue : issues)
+	{
+		if (issue.line == 0)
+			ALERT(at_console, "Map CFG %s: %s.\n", path, issue.message.c_str());
+		else
+			ALERT(at_console, "Map CFG %s line %d: %s.\n", path,
+				static_cast<int>(issue.line), issue.message.c_str());
+	}
+
+	return true;
+}
+
+static void MapCatalog_DiscoverBspFiles(std::vector<std::string>& mapIds)
+{
+	mapIds.clear();
+	if (!g_pFileSystem)
+		return;
+
+	FileFindHandle_t handle = FILESYSTEM_INVALID_FIND_HANDLE;
+	const char* fileName = g_pFileSystem->FindFirst("maps/*.bsp", &handle);
+	if (!fileName)
+	{
+		if (handle != FILESYSTEM_INVALID_FIND_HANDLE)
+			g_pFileSystem->FindClose(handle);
+		return;
+	}
+
+	do
+	{
+		std::string mapId(fileName);
+		if (mapId.size() > 4 && 0 == stricmp(mapId.c_str() + mapId.size() - 4, ".bsp"))
+		{
+			mapId.resize(mapId.size() - 4);
+			if (BrigMapCatalog::IsValidMapId(mapId))
+			{
+				mapId = BrigMapCatalog::ToLowerAscii(mapId);
+				if (std::find(mapIds.begin(), mapIds.end(), mapId) == mapIds.end())
+				{
+					if (mapIds.size() < BrigMapCatalog::MaxRegisteredMaps)
+						mapIds.push_back(mapId);
+					else
+						break;
+				}
+			}
+		}
+	} while ((fileName = g_pFileSystem->FindNext(handle)) != nullptr);
+
+	g_pFileSystem->FindClose(handle);
+	std::sort(mapIds.begin(), mapIds.end());
+}
+
+void MapCatalog_Refresh()
+{
+	g_mapCatalog.clear();
+
+	std::string manifest;
+	std::vector<std::string> mapIds;
+	std::vector<BrigMapCatalog::ParseIssue> issues;
+
+	if (MapCatalog_ReadTextFile("maps/brig_maplist.txt", BrigMapCatalog::MaxMapListBytes, manifest))
+	{
+		if (!BrigMapCatalog::ParseMapList(manifest, mapIds, &issues))
+		{
+			ALERT(at_console, "Map catalog manifest is invalid; falling back to BSP discovery.\n");
+			MapCatalog_DiscoverBspFiles(mapIds);
+		}
+	}
+	else
+	{
+		ALERT(at_console, "maps/brig_maplist.txt is missing or unreadable; discovering BSP files as a fallback.\n");
+		MapCatalog_DiscoverBspFiles(mapIds);
+	}
+
+	for (const auto& issue : issues)
+	{
+		ALERT(at_console, "Map catalog line %d: %s.\n",
+			static_cast<int>(issue.line), issue.message.c_str());
+	}
+
+	for (const std::string& mapId : mapIds)
+	{
+		if (!BrigMapCatalog::IsCatalogMapUsable(mapId, MapCatalog_BspExists(mapId)))
+		{
+			ALERT(at_console, "Map catalog: skipping %s (missing or invalid GoldSrc BSP v30).\n", mapId.c_str());
+			continue;
+		}
+
+		RuntimeMapCatalogEntry entry{};
+		entry.metadata = BrigMapCatalog::MakeDefaultMetadata(mapId);
+		if (!MapCatalog_LoadMapConfig(mapId, entry.metadata))
+		{
+			ALERT(at_console, "Map catalog: %s has no CFG; using Singleplayer-only metadata defaults.\n", mapId.c_str());
+		}
+		g_mapCatalog.push_back(std::move(entry));
+	}
+
+	ALERT(at_console, "BRIG map catalog: %d usable maps registered.\n",
+		static_cast<int>(g_mapCatalog.size()));
+}
+
+void MapCatalog_Print()
+{
+	if (g_mapCatalog.empty())
+		MapCatalog_Refresh();
+
+	ALERT(at_console, "BRIG map catalog (%d maps):\n", static_cast<int>(g_mapCatalog.size()));
+	for (const auto& entry : g_mapCatalog)
+	{
+		const auto& map = entry.metadata;
+		ALERT(at_console, "  %s | %s | campaign=%s | SP=%d COOP=%d DM=%d TDM=%d | cfg=%d\n",
+			map.name.c_str(), map.title.c_str(), map.campaignId.c_str(),
+			map.singleplayer ? 1 : 0, map.coop ? 1 : 0,
+			map.deathmatch ? 1 : 0, map.teamDeathmatch ? 1 : 0,
+			map.hasConfig ? 1 : 0);
+	}
+}
+
+int MapCatalog_GetAvailableMapCount()
+{
+	return static_cast<int>(g_mapCatalog.size());
+}
+
+const char* MapCatalog_GetAvailableMapName(int index)
+{
+	if (index < 0 || static_cast<std::size_t>(index) >= g_mapCatalog.size())
+		return nullptr;
+	return g_mapCatalog[static_cast<std::size_t>(index)].metadata.name.c_str();
+}
+
+static const BrigMapCatalog::MapMetadata* MapCatalog_FindMap(const std::string& mapId)
+{
+	for (const auto& entry : g_mapCatalog)
+	{
+		if (0 == stricmp(entry.metadata.name.c_str(), mapId.c_str()))
+			return &entry.metadata;
+	}
+	return nullptr;
+}
+
+bool MapCatalog_IsAllowedForMultiplayer(const char* mapName, bool teamDeathmatch)
+{
+	if (!mapName || !BrigMapCatalog::IsValidMapId(mapName))
+		return false;
+
+	if (g_mapCatalog.empty())
+		MapCatalog_Refresh();
+
+	const auto* metadata = MapCatalog_FindMap(mapName);
+	if (!metadata)
+		return false;
+
+	return teamDeathmatch ? metadata->teamDeathmatch : metadata->deathmatch;
+}
+
+bool MapCatalog_IsAllowedForCoOp(const char* mapName)
+{
+	if (!mapName || !BrigMapCatalog::IsValidMapId(mapName))
+		return false;
+
+	if (g_mapCatalog.empty())
+		MapCatalog_Refresh();
+
+	const auto* metadata = MapCatalog_FindMap(mapName);
+	return metadata && metadata->coop;
+}
 
 static bool MapProfiles_IsValidPlayerModelName(const char* modelName)
 {
@@ -445,7 +707,7 @@ void MapProfiles_LoadForCurrentMap()
 		return;
 
 	char mapName[64]{};
-	size_t length = 0;
+	std::size_t length = 0;
 	for (const unsigned char* p = (const unsigned char*)rawMapName; *p; ++p)
 	{
 		const unsigned char c = *p;
@@ -471,24 +733,32 @@ void MapProfiles_LoadForCurrentMap()
 	if (length == 0)
 		return;
 
+	// The catalog is refreshed from the single registry. Per-map CFG is parsed
+	// as data only; no "exec" or arbitrary console command is ever issued.
+	MapCatalog_Refresh();
+
+	BrigMapCatalog::MapMetadata metadata = BrigMapCatalog::MakeDefaultMetadata(mapName);
+	if (const auto* registered = MapCatalog_FindMap(mapName))
+	{
+		metadata = *registered;
+	}
+	else
+	{
+		MapCatalog_LoadMapConfig(mapName, metadata);
+	}
+
+	// Preserve worldspawn keys as defaults, while an explicitly present map
+	// CFG value takes precedence just as the former map profile did.
+	if (metadata.hasForcePlayerModelsSetting)
+		CVAR_SET_STRING("forcepmodels", metadata.forcePlayerModels.c_str());
+	if (metadata.hasGlobalSoundListSetting)
+		CVAR_SET_STRING("globalsoundlist", metadata.globalSoundList.c_str());
+
 	if (!*CVAR_GET_STRING("globalsoundlist"))
 	{
 		char defaultSoundList[96];
 		snprintf(defaultSoundList, sizeof(defaultSoundList), "sound/%s/soundrep.txt", mapName);
 		CVAR_SET_STRING("globalsoundlist", defaultSoundList);
-	}
-
-	char configPath[96];
-	snprintf(configPath, sizeof(configPath), "maps/%s.cfg", mapName);
-	int configLength = 0;
-	byte* configData = LOAD_FILE_FOR_ME(configPath, &configLength);
-	if (configData)
-	{
-		FREE_FILE(configData);
-		char command[128];
-		snprintf(command, sizeof(command), "exec %s\n", configPath);
-		SERVER_COMMAND(command);
-		SERVER_EXECUTE();
 	}
 
 	const char* soundList = CVAR_GET_STRING("globalsoundlist");
@@ -497,19 +767,22 @@ void MapProfiles_LoadForCurrentMap()
 		char normalizedPath[128];
 		const char* pathToLoad = soundList;
 
-		// Support the relative sound-folder form used by Sven Co-op map configs,
-		// as well as explicit sound/ and maps/ paths.
+		// Preserve the legacy Sven Co-op ../../maps/<list> spelling,
+		// but the typed CFG parser permits it only for a safe relative file
+		// below maps/ and rejects every other traversal path.
 		if (0 == strnicmp(soundList, "../../maps/", 11))
 		{
-			snprintf(normalizedPath, sizeof(normalizedPath), "maps/%s", soundList + 11);
-			pathToLoad = normalizedPath;
+			const int written = snprintf(normalizedPath, sizeof(normalizedPath),
+				"maps/%s", soundList + 11);
+			if (written > 0 && static_cast<std::size_t>(written) < sizeof(normalizedPath))
+				pathToLoad = normalizedPath;
 		}
 		else if (0 != strnicmp(soundList, "sound/", 6) &&
 			0 != strnicmp(soundList, "maps/", 5))
 		{
 			const int written = snprintf(normalizedPath, sizeof(normalizedPath),
 				"sound/%s", soundList);
-			if (written > 0 && (size_t)written < sizeof(normalizedPath))
+			if (written > 0 && static_cast<std::size_t>(written) < sizeof(normalizedPath))
 				pathToLoad = normalizedPath;
 		}
 
@@ -518,8 +791,8 @@ void MapProfiles_LoadForCurrentMap()
 
 	// Register replacement files before any map entity can try to play them.
 	MapProfiles_PrecacheAllSounds();
-
-	ALERT(at_console, "Loaded map settings for %s.\n", mapName);
+	ALERT(at_console, "Loaded typed map settings for %s (CFG: %s).\n",
+		mapName, metadata.hasConfig ? "yes" : "no");
 }
 
 //CVARS FOR SKILL LEVEL SETTINGS

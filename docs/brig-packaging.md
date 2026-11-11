@@ -38,6 +38,10 @@ or editing; incompatible/oversized files and conflicting addon sprites are kept
 as inactive originals. A studio v9 file and models over legacy limits are also
 archived rather than exposed as playable models.
 
+The unified map registry and per-map CFGs are source-owned metadata already stored beside the BSPs under `_folder/brig/maps/`. The package builder copies `maps/brig_maplist.txt` and one `maps/<id>.cfg` for every identifier in that manifest from this mod source folder into the release mod directory. The allowlist is derived from the manifest, validates safe unique IDs, and requires each matching CFG to exist. All copied metadata files are byte-for-byte checked against their source copies during release packaging.
+
+These hand-authored metadata files are kept outside the generated asset-audit JSON to avoid conflating map configuration with migrated/borrowed resources. No BSP is generated or copied by this metadata step; BSP payloads continue to come only from the audited asset manifest. Unlisted CFGs or map payload files are not implicitly swept into a release.
+
 `docs/brig-assets.json` is the audit: every output file, SHA-256, original source,
 adaptation, excluded source/reason, and preservation checks for all addon/Extras
 originals. `python tools/validate_brig.py` validates checksums, case collisions,

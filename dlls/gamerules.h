@@ -363,6 +363,26 @@ protected:
 	void SendMOTDToClient(edict_t* client);
 };
 
+
+class CHalfLifeCoOp : public CHalfLifeMultiplay
+{
+public:
+    CHalfLifeCoOp();
+
+    void Think() override;
+    void RefreshSkillData() override;
+    bool FAllowFlashlight() override;
+
+    bool IsDeathmatch() override { return false; }
+    bool IsCoOp() override { return true; }
+
+    bool FAllowMonsters() override { return true; }
+
+    bool FPlayerCanTakeDamage(CBasePlayer* pPlayer, CBaseEntity* pAttacker) override;
+    int IPointsForKill(CBasePlayer* pAttacker, CBasePlayer* pKilled) override;
+    int PlayerRelationship(CBaseEntity* pPlayer, CBaseEntity* pTarget) override;
+};
+
 inline DLL_GLOBAL CGameRules* g_pGameRules = nullptr;
 inline DLL_GLOBAL bool g_fGameOver;
 inline bool g_teamplay = false;

@@ -44,3 +44,68 @@ A preset is only a starting layout. Users can subsequently edit each CVAR indepe
 | Build | Build `Release | Win32` with the repository's Visual Studio solution and run the repository tests. |
 
 The Windows x86 CI workflow is the automated build authority. A successful DLL build does not replace a Steam Legacy runtime check; runtime-only cases must be reported separately when that environment is unavailable.
+
+
+## Main menu and session navigation
+
+The engine-owned main menu remains in `resource/gamemenu.res`. BRIG's navigation pages are VGUI1 panels hosted by `TeamFortressViewport`; `cl_dll/menu.cpp` remains the server-driven HUD `ShowMenu` component. No engine executable or engine DLL is replaced.
+
+The GameMenu Play and Multiplayer items invoke client-DLL commands `brig_menu_play` and `brig_menu_multiplayer`. Standard Resume, Disconnect, Save/Load, Options and Quit callbacks remain intact. Save/Load continue to use the engine's `notmulti` filter.
+
+The menu consumes shared data rather than maintaining parallel lists:
+- `campaign_catalog.h` derives campaign groups from Map Catalog records.
+- `game_mode_registry.h` shares the same `GameMode` enum used by the game-rules feature registry and reports launch readiness.
+- `session_config.h` owns one client-side `SessionConfiguration` object; menu pages read it, and future settings controls must update it rather than create another copy.
+- Server Browser performs Steam Legacy LAN broadcast discovery through the engine `pNetAPI`, copies transient response data before the engine releases it, sorts/paginates discovered servers and joins through the validated connection path. It does not claim to enumerate public Internet servers: the legacy GoldSrc master-server service is unavailable. Direct Connect validates a host/IP and optional port before issuing the engine `connect` command. Lobby and Create Lobby navigation exists, but Steam Lobby/party creation is not implemented.
+
+The Singleplayer VGUI path navigates category → campaign → chapter/map, exposes a campaign-wide map list and keeps Training courses separate. Before launch, the client reloads the central catalog and accepts only a safe map ID that resolves to an existing GoldSrc BSP v30, has Singleplayer enabled, belongs to a gameplay-ready mode and is not tagged as an unsupported Blue Shift/Opposing Force expansion. The launch helper queues the selected GoldSrc difficulty (`skill 1`, `skill 2` or `skill 3`) and cheats preference before map startup and reapplies them after the map command.
+
+Create Game edits the shared session model and launches Co-op, DeathMatch and Team DeathMatch listen-server sessions with max players, LAN, hostname, password and Legacy server-rule CVARs. Co-op forces competitive time/frag limits to zero and campaign monsters on; its Server Settings page hides those fixed options. The menu also exposes the shared Server Settings page and validated Direct Connect. Server Browser is LAN-only through the Steam Legacy `pNetAPI`; public Internet master-server discovery is not available. Steam Lobby/Create Lobby remain unavailable pending Steamworks API integration. A command-line HLDS launcher exists for foreground dedicated-server start/stop, but a GUI process manager and remote console remain unfinished. The command sequence and actual server-side result still require manual Steam Legacy runtime validation.
+
+## Unified map catalog
+
+The repository source registry is `_folder/brig/maps/brig_maplist.txt`; per-map metadata lives beside the BSPs in `_folder/brig/maps/<mapname>.cfg`. At runtime they resolve to `maps/brig_maplist.txt` and `maps/<mapname>.cfg` inside the installed mod. Singleplayer, Create Game, Co-op, DeathMatch, Team DeathMatch, lobby, and map rotation must all consume this same catalog. Do not maintain a second BSP list in any UI or game-mode subsystem.
+
+The server-side catalog implementation is shared through `game_shared/map_catalog.h` and exposed through the game DLL bridge:
+- `MapCatalog_Refresh()`
+- `MapCatalog_GetAvailableMapCount()`
+- `MapCatalog_GetAvailableMapName(index)`
+- `MapCatalog_IsAllowedForMultiplayer(mapName, teamDeathmatch)`
+- `MapCatalog_Print()`
+
+The debug/administration commands `brig_mapcatalog_reload` and `brig_mapcatalog_list` refresh and inspect that same list. The existing `sv_load_all_maps` diagnostic now uses the registered catalog and preserves manifest order. The engine filesystem's `FindFirst/FindNext` BSP enumeration is only a compatibility fallback when `maps/brig_maplist.txt` is missing or unreadable.
+
+The client menu reads the same manifest through its initialized Legacy-compatible filesystem and uses the shared parser from `game_shared/map_catalog.h` for IDs and per-map CFG metadata. It does not maintain a parallel campaign/map list. The game-DLL-side catalog remains authoritative for server map rotation and multiplayer map eligibility; installing a BSP alone does not prove that its campaign entities/resources are supported.
+
+### Map/session ownership
+
+- **Map catalog** owns map registration and map metadata, not session choices.
+- **Map CFG** owns map-specific presentation compatibility and the map's declared mode availability/default.
+- **Session/Create Game/Lobby** owns the user's selected mode and session options.
+- **GameRules** remains the authority for actual gameplay behavior; map metadata is validated against the selected mode before starting the map.
+- **Menu/UI** reads catalog metadata and writes session configuration; it does not directly mutate entities or gameplay state.
+
+### Map rotation
+
+The existing `mapcycle.txt` remains the server operator's ordering and player-count filter, not a second map database. Before a selected entry is accepted, the game checks it against the central catalog and the active DeathMatch or Team DeathMatch availability flag. Unsupported/stale entries are skipped; if player-count filters exclude all otherwise valid entries, the first catalog-approved cycle entry is used. If the cycle has no valid entry, a catalog-approved map for the active mode is selected; if none exists, the server stays on the current map and logs a warning.
+
+
+The engine GameUI overrides are narrowly SHA-256 allowlisted in `tools/validate_brig.py`. Only the exact reviewed versions of `resource/gamemenu.res`, `resource/gameui_english.txt` and `resource/gameui_russian.txt` are accepted; the integrity checks for all other audited resources remain unchanged.
+
+## Campaign catalog and training separation
+
+`game_shared/campaign_catalog.h` derives campaigns and chapters exclusively from Map Catalog records. Story categories are selected through the catalog metadata (`half_life_1`, `blue_shift`, `opposing_force`, and `custom`). Chapter order comes from `brig_chapter_order`; map order inside a chapter comes from `brig_map_order`. The first sorted map of each chapter is its chapter entry point.
+
+`brig_campaign_start` identifies the first map of the whole campaign. It is not a per-chapter flag. Training metadata (`brig_category "training"`, including the legacy `hazard_course` ID) is excluded from story campaigns and surfaced separately through the training-course helpers.
+
+The category filter is metadata filtering only. It must not make an unsupported expansion or gameplay mode appear playable. Every launch path must additionally check the content audit and `BrigGameModeRegistry::IsGameplayReady`.
+
+See [BRIG-CAMPAIGNS.md](BRIG-CAMPAIGNS.md) for the installed-content audit and explicit implementation boundaries.
+
+## Co-op map transitions
+
+Co-op uses the original GoldSrc trigger_changelevel entity and CHANGE_LEVEL engine call. The game DLL does not replace the mapper's map or landmark keys with a parallel campaign sequence.
+
+For Co-op only, the trigger first uses the player activator if that player is inside the named trigger_transition volume. If a map entity is the activator (or the player activator is outside the volume), it searches connected clients and selects the first player actually inside that volume. It validates the destination through MapCatalog_IsAllowedForCoOp. That catalog check requires the BSP to be installed and the destination CFG to declare Co-op support. A successful trigger then calls the normal CHANGE_LEVEL(map, landmark) path; the server owns the level change for the connected session. Singleplayer continues to use its original local-player check and is not filtered through the Co-op catalog gate.
+
+The first valid trigger activation starts the whole server transition; BRIG does not require all players to stand in the trigger simultaneously. The engine's Legacy transition system remains responsible for carrying clients through the server level change and restoring player placement. Verify the loading screen, landmark placement, and inventory/ammo continuity with multiple Steam Legacy clients before calling this behavior runtime-verified.

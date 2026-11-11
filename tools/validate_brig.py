@@ -13,8 +13,71 @@ from brig_assets import cstring, digest, model_info, pe_check, sprite_check, wav
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# These are intentional, narrowly-scoped BRIG GameUI overrides. The large
+# preserved-resource audit manifest remains the source of all other hashes;
+# these three resources are accepted only at this exact reviewed revision.
+APPROVED_RESOURCE_OVERRIDES = {
+    "resource/gamemenu.res": "83e64c0fbab103db520e857899152a0acd75c25c0ad2ea0804b3f34c21efbc3b",
+    "resource/gameui_english.txt": "8542629a882c5e6e9309568d8ed7b3fc5b61a9775cef9b5a87e3c4c4894372dd",
+    "resource/gameui_russian.txt": "55c9fe92577c29aba6943a44aecc9e56d3c5ae5dc7862c8a769da70c926db58b",
+}
 
-def validate(mod: Path, manifest: Path, require_dlls: bool = False) -> dict:
+# The map manifest is the source of truth for the generated metadata
+# allowlist. Each registered BSP identifier must have exactly one CFG.
+def _map_metadata_paths() -> tuple[str, ...]:
+    manifest = ROOT / "_folder/brig/maps/brig_maplist.txt"
+    paths = ["maps/brig_maplist.txt"]
+    if not manifest.is_file():
+        return tuple(paths)
+
+    seen = set()
+    for line_number, raw_line in enumerate(manifest.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw_line.strip()
+        if not line or line.startswith("#") or line.startswith("//"):
+            continue
+        parts = line.split(None, 1)
+        if len(parts) > 1 and not (
+            parts[1].startswith("#") or parts[1].startswith("//")
+        ):
+            raise ValueError(f"{manifest}: unexpected data on line {line_number}")
+        map_id = parts[0]
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,31}", map_id):
+            raise ValueError(f"{manifest}: unsafe map identifier on line {line_number}")
+        normalized = map_id.lower()
+        if normalized in seen:
+            raise ValueError(f"{manifest}: duplicate map identifier on line {line_number}")
+        if len(seen) >= 512:
+            raise ValueError(f"{manifest}: map catalog exceeds the 512-entry limit")
+        seen.add(normalized)
+        paths.append(f"maps/{normalized}.cfg")
+    return tuple(paths)
+
+
+MAP_METADATA_FILES = _map_metadata_paths()
+
+
+def validate_generated_map_metadata(
+    mod: Path,
+    actual: dict[str, Path],
+    errors: list[str],
+    require: bool = False,
+) -> None:
+    present = any(name in actual for name in MAP_METADATA_FILES)
+    for name in MAP_METADATA_FILES:
+        source = ROOT / "_folder/brig" / name
+        target = actual.get(name)
+        if target is None:
+            if require or present:
+                errors.append(f"missing generated map metadata: {name}")
+            continue
+        if not source.is_file():
+            errors.append(f"source map metadata is missing: {source}")
+        elif digest(target) != digest(source):
+            errors.append(f"generated map metadata differs from source: {name}")
+
+
+def validate(mod: Path, manifest: Path, require_dlls: bool = False,
+             require_map_metadata: bool = False) -> dict:
     audit = json.loads(manifest.read_text(encoding="utf-8"))
     errors = []
     # File synchronization tools may keep dot-prefixed partial copies beside
@@ -28,7 +91,8 @@ def validate(mod: Path, manifest: Path, require_dlls: bool = False) -> dict:
         if path.is_symlink() or name.lower() in folded:
             errors.append(f"symlink or case-insensitive duplicate: {name}")
         folded[name.lower()] = name
-    generated = {"cl_dlls/client.dll", "dlls/hl.dll", "BUILD.json"}
+    generated = {"cl_dlls/client.dll", "dlls/hl.dll", "BUILD.json", *MAP_METADATA_FILES}
+    validate_generated_map_metadata(mod, actual, errors, require=require_map_metadata)
     for name in sorted(actual.keys() - expected.keys() - generated):
         errors.append(f"untracked payload: {name}")
     for name, record in expected.items():
@@ -36,7 +100,8 @@ def validate(mod: Path, manifest: Path, require_dlls: bool = False) -> dict:
         if path is None:
             errors.append(f"missing resource: {name}")
             continue
-        if digest(path) != record["sha256"]:
+        actual_sha256 = digest(path)
+        if actual_sha256 != record["sha256"] and actual_sha256 != APPROVED_RESOURCE_OVERRIDES.get(name):
             errors.append(f"checksum changed: {name}")
         source = PurePosixPath(record["source"])
         if "need restock" in source.parts and len(source.parts) >= 4 and source.parts[2] in {"cstrike", "cstrike_hd"}:

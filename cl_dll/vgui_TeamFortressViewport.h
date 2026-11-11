@@ -47,6 +47,7 @@ class CommandButton;
 class BuildButton;
 class ClassButton;
 class CMenuPanel;
+class CBrigMainMenuPanel;
 class DragNDropPanel;
 class CTransparentPanel;
 class CClassMenuPanel;
@@ -491,6 +492,7 @@ private:
 
 	CCommandMenu *m_pCommandMenus[ MAX_MENUS ];
 	CCommandMenu *m_pCurrentCommandMenu;
+	CBrigMainMenuPanel* m_pBrigMainMenu;
 	float		 m_flMenuOpenTime;
 	float		 m_flScoreBoardLastUpdated;
 	float		 m_flSpectatorPanelLastUpdated;
@@ -546,6 +548,7 @@ public:
 
 	int		CreateCommandMenu( const char * menuFile, bool direction, int yOffset, bool flatDesign, float flButtonSizeX, float flButtonSizeY, int xOffset );
 	void	CreateScoreBoard( void );
+	void OpenBrigMainMenu(bool multiplayer);
 	CommandButton * CreateCustomButton( char *pButtonText, char * pButtonName, int  iYOffset );
 	CCommandMenu *	CreateDisguiseSubmenu( CommandButton *pButton, CCommandMenu *pParentMenu, const char *commandText, int iYOffset, int iXOffset = 0 );
 

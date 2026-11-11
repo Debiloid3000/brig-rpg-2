@@ -27,6 +27,7 @@
 #include "saverestore.h"
 #include "trains.h" // trigger_camera has train functionality
 #include "gamerules.h"
+#include "game.h"
 
 #define SF_TRIGGER_PUSH_START_OFF 2		   //spawnflag that makes trigger_push spawn turned OFF
 #define SF_TRIGGER_HURT_TARGETONCE 1	   // Only fire hurt target once
@@ -1484,6 +1485,15 @@ void CChangeLevel::ChangeLevelNow(CBaseEntity* pActivator)
 	if (g_pGameRules->IsDeathmatch())
 		return;
 
+	// A Co-op transition must not point to an absent, unregistered, or
+	// non-Co-op BSP. Singleplayer keeps the original unrestricted Legacy path.
+	if (g_pGameRules->IsCoOp() && !MapCatalog_IsAllowedForCoOp(m_szMapName))
+	{
+		ALERT(at_console, "Co-op changelevel refused: destination %s is not registered for Co-op.\n",
+			m_szMapName);
+		return;
+	}
+
 	// Some people are firing these multiple times in a frame, disable
 	if (gpGlobals->time == pev->dmgtime)
 		return;
@@ -1491,10 +1501,40 @@ void CChangeLevel::ChangeLevelNow(CBaseEntity* pActivator)
 	pev->dmgtime = gpGlobals->time;
 
 
-	CBaseEntity* pPlayer = UTIL_GetLocalPlayer();
-	if (!InTransitionVolume(pPlayer, m_szLandmarkName))
+	// Classic Singleplayer checks the local player. Co-op must not rely on a
+	// listen-server local player: touches may come from remote clients and use
+	// activators may be map entities. Pick a player who is actually in the
+	// transition volume; this also works on a dedicated server.
+	CBaseEntity* pPlayer = nullptr;
+	if (g_pGameRules->IsCoOp())
 	{
-		ALERT(at_aiconsole, "Player isn't in the transition volume %s, aborting\n", m_szLandmarkName);
+		if (pActivator && pActivator->IsPlayer() &&
+			InTransitionVolume(pActivator, m_szLandmarkName))
+		{
+			pPlayer = pActivator;
+		}
+		else
+		{
+			for (int i = 1; i <= gpGlobals->maxClients; ++i)
+			{
+				CBaseEntity* pCandidate = UTIL_PlayerByIndex(i);
+				if (pCandidate && pCandidate->IsPlayer() &&
+					InTransitionVolume(pCandidate, m_szLandmarkName))
+				{
+					pPlayer = pCandidate;
+					break;
+				}
+			}
+		}
+	}
+	else
+	{
+		pPlayer = UTIL_GetLocalPlayer();
+	}
+
+	if (FNullEnt(pPlayer))
+	{
+		ALERT(at_aiconsole, "No player is in the transition volume %s, aborting\n", m_szLandmarkName);
 		return;
 	}
 
